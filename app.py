@@ -17,6 +17,25 @@ from flask import Flask, jsonify, request, send_file
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
+
+# The UI is hosted on GitHub Pages, while this Python app runs separately.
+# Browser clients require explicit, narrow cross-origin access to the API.
+FRONTEND_ORIGINS = {
+    "https://yubsub.godthefather1952.com",
+    "https://godthefather1952.github.io",
+}
+
+
+@app.after_request
+def allow_pages_origin(response):
+    origin = request.headers.get("Origin")
+    if origin in FRONTEND_ORIGINS and request.path.startswith("/api/"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers.add("Vary", "Origin")
+    return response
 MAX_TRACKS = max(1, min(200, int(os.getenv("MAX_TRACKS", "50"))))
 MAX_ACTIVE = max(1, int(os.getenv("MAX_ACTIVE_JOBS", "2")))
 MAX_TOTAL = max(10, int(os.getenv("MAX_ARCHIVE_MB", "400"))) * 1024**2
