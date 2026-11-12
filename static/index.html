@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>yubsub – Playlist to MP3 Zip</title>
+<style>
+  :root{--bg:#0f1115;--card:#181b22;--fg:#e8eaf0;--mut:#8b91a1;--acc:#ff3d57;--ok:#2ecc71;--bd:#272b36}
+  @media (prefers-color-scheme:light){:root{--bg:#f4f5f8;--card:#fff;--fg:#14161c;--mut:#6a7080;--bd:#e0e3ea}}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);
+       font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
+  main{width:100%;max-width:560px;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px}
+  h1{margin:0 0 4px;font-size:1.6rem}h1 span{color:var(--acc)}
+  p.sub{margin:0 0 20px;color:var(--mut)}
+  input,select,button{font:inherit;border-radius:10px;border:1px solid var(--bd);padding:12px 14px;background:transparent;color:var(--fg);width:100%}
+  .row{display:flex;gap:10px;margin-top:10px}
+  select{width:auto}
+  button{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .bar{height:10px;background:var(--bd);border-radius:99px;overflow:hidden;margin-top:20px}
+  .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
+  #msg{margin-top:10px;color:var(--mut);font-size:.92rem;word-break:break-word}
+  #msg.err{color:var(--acc)}
+  a.dl{display:block;text-align:center;text-decoration:none;margin-top:16px;padding:12px;border-radius:10px;background:var(--ok);color:#fff;font-weight:600}
+  details{margin-top:12px;color:var(--mut);font-size:.85rem}
+  small{display:block;margin-top:20px;color:var(--mut);font-size:.78rem}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <h1>yub<span>sub</span></h1>
+  <p class="sub">Paste a YouTube playlist link, get a ZIP of MP3s.</p>
+  <form id="f">
+    <input id="url" type="url" required placeholder="https://www.youtube.com/playlist?list=..." autocomplete="off">
+    <div class="row">
+      <select id="q" aria-label="Quality">
+        <option value="128">128 kbps</option>
+        <option value="192" selected>192 kbps</option>
+        <option value="256">256 kbps</option>
+        <option value="320">320 kbps</option>
+      </select>
+      <button id="go">Convert</button>
+    </div>
+  </form>
+  <div class="bar" id="barwrap" hidden><i id="bar"></i></div>
+  <div id="msg"></div>
+  <a class="dl" id="dl" hidden>Download ZIP</a>
+  <details id="fails" hidden><summary>Skipped tracks</summary><ul id="flist"></ul></details>
+  <small>Only download content you own or have permission to download.</small>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let timer;
+function msg(t,err){$("msg").textContent=t;$("msg").className=err?"err":""}
+$("f").addEventListener("submit",async e=>{
+  e.preventDefault();
+  clearInterval(timer);
+  $("dl").hidden=true;$("fails").hidden=true;$("barwrap").hidden=false;$("bar").style.width="2%";
+  $("go").disabled=true;msg("Starting…");
+  try{
+    const r=await fetch("/api/start",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({url:$("url").value,quality:$("q").value})});
+    const j=await r.json();
+    if(!r.ok)throw new Error(j.error||"Failed to start");
+    poll(j.id);
+  }catch(x){msg(x.message,true);$("go").disabled=false;$("barwrap").hidden=true}
+});
+function poll(id){
+  timer=setInterval(async()=>{
+    try{
+      const s=await (await fetch("/api/status/"+id)).json();
+      if(s.error&&!s.status)throw new Error(s.error);
+      const pct=s.total?Math.max(2,Math.round(s.done/s.total*100)):2;
+      $("bar").style.width=pct+"%";
+      if(s.status==="downloading")msg(`(${s.done}/${s.total}) ${s.current||""}`);
+      else if(s.status==="zipping")msg("Zipping…");
+      else if(s.status==="done"){
+        clearInterval(timer);$("bar").style.width="100%";
+        msg(`Done: ${s.title}`);$("dl").href="/api/zip/"+id;$("dl").hidden=false;$("go").disabled=false;
+        if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false}
+      }else if(s.status==="error"){clearInterval(timer);msg(s.error,true);$("go").disabled=false}
+    }catch(x){clearInterval(timer);msg(x.message,true);$("go").disabled=false}
+  },1000);
+}
+</script>
+</body>
+</html>
