@@ -20,7 +20,7 @@ jobs:
       - name: Install converter and tests
         run: python -m pip install -r requirements.txt pytest
       - name: Verify backend and archive behavior
-        run: pytest -q
+        run: python -m pytest -q
       - name: Verify inline front-end JavaScript syntax
         run: |
           python - <<'PY'
