@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b0c0e">
+  <meta name="description" content="YUBSUB by 2.wav. Turn authorized YouTube playlists into organized MP3 ZIP archives.">
+  <title>YUBSUB — Your playlist. One ZIP.</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0b0c0e;--surface:#16181b;--surface2:#202226;--edge:#34363c;--white:#f4f3ee;--muted:#a1a19e;--yellow:#fbe052;--amber:#bda83d;--good:#a9df8c;--bad:#ff9695;font-family:Inter,"Arial",ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;min-height:100vh;color:var(--white);background:var(--bg);overflow-x:hidden}
+    body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(circle at 13% 20%,#46402027,transparent 38%),radial-gradient(circle at 88% 80%,#48413713,transparent 36%)}
+    button,input,select{font:inherit}button{cursor:pointer}button:disabled{cursor:not-allowed;opacity:.58}a{color:inherit}
+    ::selection{background:var(--yellow);color:#161616}
+    .container{max-width:1260px;margin:auto;padding:0 clamp(20px,4.5vw,58px)}
+    .mast{height:102px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid #ffffff20}
+    .brand{display:flex;align-items:center;gap:12px;text-decoration:none;min-width:0}
+    .brandicon{height:41px;width:41px;background:var(--yellow);color:#171717;display:grid;place-items:center;border-radius:12px;box-shadow:0 7px 28px #fbe05218}
+    .brandicon svg{width:27px;height:27px}
+    .brandwords{display:flex;flex-direction:column;gap:1px;line-height:1}
+    .brandname{font-size:25px;font-weight:950;letter-spacing:-1.5px}
+    .byline{font-size:10px;font-weight:850;color:#a9a9a5;letter-spacing:.22em}
+    .mastnav{display:flex;align-items:center;gap:17px}
+    .mastnav a{text-decoration:none;font-size:12px;color:#cccac1;font-weight:800;letter-spacing:.03em}
+    .topbadge{font-size:10px;letter-spacing:.13em;font-weight:850;border:1px solid #454445;color:var(--yellow);border-radius:99px;padding:11px 16px;white-space:nowrap}
+    .circle{width:7px;height:7px;display:inline-block;background:var(--yellow);border-radius:50%;margin-right:9px;box-shadow:0 0 14px #fbe05288}
+    .main{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(380px,.95fr);align-items:center;gap:clamp(38px,5vw,90px);padding:95px 0 107px}
+    .kicker{display:inline-flex;align-items:center;color:var(--yellow);font-size:11px;font-weight:900;letter-spacing:.24em;margin-bottom:23px}
+    .headline{font-family:Impact,"Arial Narrow",Haettenschweiler,system-ui,sans-serif;font-size:clamp(70px,9.1vw,134px);line-height:.90;letter-spacing:-.045em;font-weight:900;margin:0;text-transform:uppercase}
+    .headline .yellow{color:var(--yellow)}.headline .outline{color:transparent;-webkit-text-stroke:1.7px #f4f3ee;paint-order:stroke fill}
+    .deck{color:#bcbbb6;font-size:clamp(15px,1.55vw,19px);line-height:1.65;max-width:475px;margin:30px 0 27px}
+    .proof{display:flex;gap:18px;flex-wrap:wrap;padding-top:17px}
+    .proof span{font-size:11px;letter-spacing:.06em;font-weight:750;color:#d8d6ce;display:inline-flex;align-items:center;gap:8px}
+    .proof b{color:var(--yellow);font-size:15px}
+    .art{position:relative;height:130px;margin-top:33px;max-width:420px;display:flex;align-items:end;gap:6px;opacity:.77;overflow:hidden;mask-image:linear-gradient(to right,#000 62%,transparent)}
+    .art i{height:var(--h);width:12px;display:block;border-radius:10px 10px 0 0;background:linear-gradient(180deg,var(--yellow),#99863033);transform-origin:bottom;animation:pulse 1.6s ease-in-out infinite alternate;animation-delay:var(--d)}
+    @keyframes pulse{to{transform:scaleY(.48)}}
+    .workspace{position:relative;border-radius:24px;border:1px solid #5a5750;background:linear-gradient(145deg,#232427,#131416);box-shadow:0 22px 90px #000b,0 0 0 8px #ffffff04;overflow:hidden}
+    .workspace:before{content:"";display:block;height:4px;background:linear-gradient(90deg,var(--yellow),#977f2e 56%,transparent)}
+    .workspace-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:25px 28px;border-bottom:1px solid #ffffff15}
+    .workspace-title{font-size:15px;font-weight:950;letter-spacing:.01em;display:flex;align-items:center;gap:9px}
+    .workspace-title svg{width:19px;height:19px;color:var(--yellow)}
+    .live{font-size:10px;font-weight:850;letter-spacing:.14em;padding:7px 10px;border-radius:40px;background:#353525;color:#e3d675;white-space:nowrap}
+    .workspace-body{padding:27px 28px 29px}
+    .field-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+    label{font-size:12px;letter-spacing:.025em;font-weight:850}
+    .num{color:var(--yellow);font-size:11px;letter-spacing:.1em;margin-right:9px}
+    .field-help{font-size:11px;color:#999b9a}
+    .urlrow{display:flex;align-items:center;padding:7px;background:#0b0d0f;border:1px solid #505053;border-radius:13px;transition:border-color .2s}
+    .urlrow:focus-within{border-color:var(--yellow)}
+    #url{flex:1;min-width:0;padding:13px 11px;color:#f4f3ee;border:0;outline:0;background:transparent;font-size:13px}
+    #url::placeholder{color:#767878}
+    .paste{border:1px solid #545453;background:#26282b;color:#f3f1e6;border-radius:9px;font-size:11px;font-weight:850;padding:12px 15px;white-space:nowrap}
+    .paste:hover{background:#373a3e}
+    .middle{margin-top:28px}
+    .quality-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    .quality-option{position:relative;display:block;cursor:pointer}
+    .quality-option input{position:absolute;opacity:0;pointer-events:none}
+    .quality-option span{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:3px;min-height:66px;border-radius:11px;background:#111316;border:1px solid #414348;color:#e6e5df;transition:all .18s}
+    .quality-option b{font-size:18px;font-weight:950;letter-spacing:-.04em}
+    .quality-option small{font-size:9px;color:#9d9e9b;font-weight:700;letter-spacing:.08em}
+    .quality-option input:checked+span{background:#fbe05216;border-color:var(--yellow);color:var(--yellow)}
+    .quality-option input:focus-visible+span{outline:2px solid white;outline-offset:3px}
+    .note{color:#91918e;font-size:11px;line-height:1.5;margin:10px 0 0}
+    .submit{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--yellow);color:#151515;border:0;border-radius:12px;font-size:14px;font-weight:950;padding:18px 20px;margin-top:29px;transition:transform .15s,filter .15s}
+    .submit:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06)}
+    .submit .arr{font-size:23px;line-height:.8}
+    .footnote{display:flex;justify-content:center;align-items:center;gap:7px;color:#a8a9a5;font-size:11px;margin-top:16px;text-align:center}
+    .footnote svg{width:14px;height:14px;color:var(--yellow)}
+    .error{margin-top:16px;border-radius:11px;border:1px solid #955a59;background:#432627;color:#ffd3d2;font-size:12px;line-height:1.6;padding:14px 15px;overflow-wrap:anywhere}
+    .result{margin-top:23px;padding:19px;background:#0c0e10;border:1px solid #45474a;border-radius:14px}
+    .resulttop{display:flex;justify-content:space-between;gap:12px;align-items:center}
+    #stage{font-size:13px;font-weight:900}#count{font-size:11px;color:#b2b1a9;white-space:nowrap}
+    #current{font-size:12px;color:#acaca7;margin:11px 0 0;overflow-wrap:anywhere;line-height:1.5}
+    .meter{height:9px;border-radius:20px;background:#323438;margin:20px 0 10px;overflow:hidden}
+    #fill{height:100%;width:0;background:linear-gradient(90deg,#a6943e,var(--yellow));border-radius:20px;transition:width .35s}
+    .resultfoot{display:flex;justify-content:space-between;align-items:center;color:#adada8;font-size:11px}
+    .cancel{border:0;background:transparent;color:#f2c28a;font-size:12px;font-weight:850;padding:7px 0}
+    .download{margin-top:17px;border-radius:10px;text-decoration:none;display:flex;justify-content:space-between;align-items:center;background:#c2e7a5;color:#152015;font-size:13px;font-weight:950;padding:16px}
+    #skipped{margin-top:14px;font-size:12px;color:#c2beb1}#skipped summary{cursor:pointer}#skipped li{margin:7px 0;overflow-wrap:anywhere}
+    .strip{border-top:1px solid #ffffff22;border-bottom:1px solid #ffffff22;background:#ffffff04}
+    .stripinner{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;padding-top:27px;padding-bottom:30px}
+    .step{padding:4px 32px;border-right:1px solid #ffffff22}
+    .step:first-child{padding-left:0}.step:last-child{padding-right:0;border-right:0}
+    .stepnumber{font-size:10px;font-weight:900;letter-spacing:.18em;color:var(--yellow);margin-bottom:11px}
+    .steptitle{font-size:16px;font-weight:950;letter-spacing:-.03em}
+    .steptext{font-size:12px;color:#a4a4a2;line-height:1.7;margin:8px 0 0}
+    .footer{padding-top:34px;padding-bottom:35px;display:flex;align-items:start;justify-content:space-between;gap:35px}
+    .footerlogo{font-weight:950;font-size:15px;letter-spacing:-.03em}
+    .footerlogo em{font-style:normal;color:var(--yellow)}.legal{max-width:650px;text-align:right;font-size:11px;color:#939390;line-height:1.7}
+    [hidden]{display:none!important}
+    @media(max-width:1000px){.main{grid-template-columns:minmax(0,1fr) minmax(340px,1fr);gap:30px;padding:80px 0}.headline{font-size:clamp(65px,9.2vw,95px)}.workspace-body{padding:23px}.workspace-head{padding:22px 23px}.art{height:95px}}
+    @media(max-width:760px){.mast{height:80px}.mastnav a{display:none}.main{grid-template-columns:1fr;padding:65px 0 70px;gap:38px}.headline{font-size:clamp(66px,14.2vw,110px)}.deck{margin-top:22px}.art{display:none}.workspace{max-width:620px;width:100%;margin:0 auto}.stripinner{grid-template-columns:1fr;gap:20px}.step{padding:0 0 17px!important;border-right:0;border-bottom:1px solid #ffffff21}.step:last-child{border:0;padding-bottom:0!important}.footer{flex-direction:column;gap:13px}.legal{text-align:left}}
+    @media(max-width:380px){.container{padding-left:14px;padding-right:14px}.brandname{font-size:22px}.topbadge{font-size:9px;padding:9px}.headline{font-size:59px}.workspace-head{padding:17px}.workspace-body{padding:18px 15px}.quality-grid{gap:5px}.quality-option b{font-size:16px}.quality-option span{min-height:62px}.field-help{display:none}}
+    @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header class="mast">
+      <a class="brand" href="/" aria-label="YUBSUB home">
+        <span class="brandicon" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="M4 18V14M9 24V8M14 20V12M19 27V5M24 22V10M29 18V14" stroke="currentColor" stroke-width="3.2" stroke-linecap="round"/></svg></span>
+        <span class="brandwords"><span class="brandname">yubsub<span style="color:var(--yellow)">.</span></span><span class="byline">BY 2.WAV</span></span>
+      </a>
+      <div class="mastnav"><a href="#how">HOW IT WORKS</a><span class="topbadge"><span class="circle"></span>PLAYLIST TO MP3</span></div>
+    </header>
+    <main class="main">
+      <section aria-labelledby="headline">
+        <div class="kicker"><span class="circle"></span>THE AUDIO TOOLKIT / 001</div>
+        <h1 id="headline" class="headline">PLAYLISTS<br><span class="outline">IN.</span><br><span class="yellow">MP3s OUT.</span></h1>
+        <p class="deck">Your favorite collection, without the chaos. Convert a YouTube playlist into individual MP3 files, neatly numbered and wrapped into <strong style="color:var(--white)">one ZIP.</strong></p>
+        <div class="proof"><span><b>✓</b> NO SIGN-UP</span><span><b>✓</b> ONE ZIP FILE</span><span><b>✓</b> BUILT FOR PLAYLISTS</span></div>
+        <div class="art" aria-hidden="true">
+          <i style="--h:23%;--d:-.1s"></i><i style="--h:45%;--d:-.5s"></i><i style="--h:31%;--d:-1.2s"></i><i style="--h:67%;--d:-.3s"></i><i style="--h:52%;--d:-.8s"></i><i style="--h:83%;--d:-.1s"></i><i style="--h:41%;--d:-.4s"></i><i style="--h:100%;--d:-1.1s"></i><i style="--h:64%;--d:-.7s"></i><i style="--h:91%;--d:-.3s"></i><i style="--h:49%;--d:-1.4s"></i><i style="--h:72%;--d:-.2s"></i><i style="--h:39%;--d:-.8s"></i><i style="--h:59%;--d:-1.3s"></i><i style="--h:30%;--d:-.2s"></i><i style="--h:45%;--d:-.9s"></i><i style="--h:24%;--d:-.4s"></i><i style="--h:35%;--d:-.1s"></i>
+        </div>
+      </section>
+      <section class="workspace" aria-label="Playlist converter">
+        <div class="workspace-head">
+          <span class="workspace-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 5h16M4 10h12M4 15h8M4 20h6"/><path d="m16 15 5 3-5 3z"/></svg> CONVERSION STUDIO</span>
+          <span class="live" id="system">READY TO RUN</span>
+        </div>
+        <div class="workspace-body">
+          <form id="form">
+            <div class="field-head"><label for="url"><span class="num">01 /</span> PASTE PLAYLIST LINK</label><span class="field-help">YouTube or YouTube Music</span></div>
+            <div class="urlrow"><input id="url" type="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://youtube.com/playlist?list=..." aria-describedby="urlhelp"><button type="button" class="paste" id="paste">PASTE</button></div>
+            <div class="middle">
+              <div class="field-head"><label><span class="num">02 /</span> CHOOSE AUDIO QUALITY</label><span class="field-help">MP3 bitrate</span></div>
+              <div class="quality-grid" role="group" aria-label="MP3 bitrate">
+                <label class="quality-option"><input type="radio" name="quality" value="128"><span><b>128</b><small>KBPS</small></span></label>
+                <label class="quality-option"><input type="radio" name="quality" value="192" checked><span><b>192</b><small>KBPS</small></span></label>
+                <label class="quality-option"><input type="radio" name="quality" value="256"><span><b>256</b><small>KBPS</small></span></label>
+                <label class="quality-option"><input type="radio" name="quality" value="320"><span><b>320</b><small>KBPS</small></span></label>
+              </div>
+              <p class="note" id="urlhelp">Higher bitrates make larger files, but cannot improve the source audio.</p>
+            </div>
+            <button type="submit" class="submit" id="go"><span id="gotext">BUILD MY MP3 ZIP</span><span class="arr" aria-hidden="true">↗</span></button>
+          </form>
+          <div class="result" id="results" hidden aria-live="polite">
+            <div class="resulttop"><strong id="stage">Starting conversion</strong><span id="count">—</span></div>
+            <p id="current">Connecting to converter…</p>
+            <div class="meter" id="progress" role="progressbar" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div>
+            <div class="resultfoot"><span id="percent">0%</span><button type="button" class="cancel" id="cancel">CANCEL JOB</button></div>
+            <a id="download" class="download" href="#" hidden><span>↓ DOWNLOAD YOUR MP3 ZIP</span><span aria-hidden="true">↗</span></a>
+            <details id="skipped" hidden><summary id="skiptitle">Skipped tracks</summary><ul id="skiplist"></ul></details>
+          </div>
+          <div class="error" id="error" role="alert" hidden></div>
+          <div class="footnote"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg> NO ACCOUNT REQUIRED · TEMPORARY FILES AUTO-DELETE</div>
+        </div>
+      </section>
+    </main>
+  </div>
+  <section class="strip" id="how" aria-label="How YUBSUB works">
+    <div class="container stripinner">
+      <div class="step"><div class="stepnumber">STEP 01 / COPY</div><div class="steptitle">Grab the playlist URL.</div><p class="steptext">Open a public YouTube playlist or YouTube Music playlist and copy its link.</p></div>
+      <div class="step"><div class="stepnumber">STEP 02 / CONVERT</div><div class="steptitle">Pick your sound quality.</div><p class="steptext">We'll convert the available videos to MP3 one at a time. Watch the progress live.</p></div>
+      <div class="step"><div class="stepnumber">STEP 03 / DOWNLOAD</div><div class="steptitle">One click. Every track.</div><p class="steptext">Grab a single ZIP with numbered MP3s and a report of any tracks that were skipped.</p></div>
+    </div>
+  </section>
+  <footer class="container footer">
+    <div class="footerlogo">yubsub<em>.</em> <span style="color:#979791;font-size:10px;font-weight:700">BY 2.WAV</span></div>
+    <div class="legal">Only download audio you own or have permission to use. YouTube may restrict access to some videos or hosted servers. ZIPs are temporary and expire after 30 minutes. YUBSUB is an independent tool, not affiliated with YouTube.</div>
+  </footer>
+  <script src="static/config.js"></script>
+  <script>
+    (() => {
+      "use strict";
+      const el = name => document.getElementById(name);
+      const JOB_KEY = "yubsub-active-job";
+      const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+      const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\/+$/, "");
+      const NEEDS_API = !LOCAL && !API_ROOT;
+      const apiUrl = path => API_ROOT + path;
+      let jobId = null, pollTimer = null, busy = false, retries = 0;
+      const safeStore = (value) => { try { if(value) sessionStorage.setItem(JOB_KEY,value); else sessionStorage.removeItem(JOB_KEY); } catch {} };
+      const savedJob = () => { try { return sessionStorage.getItem(JOB_KEY); } catch { return null; } };
+      const error = message => { el("error").textContent = message; el("error").hidden = false; };
+      const clearError = () => { el("error").hidden = true; el("error").textContent = ""; };
+      const meter = value => { const n = Math.max(0,Math.min(100,Math.round(value))); el("fill").style.width = n + "%"; el("percent").textContent = n + "%"; el("progress").setAttribute("aria-valuenow",String(n)); };
+      const end = () => { busy=false; el("go").disabled=false; el("gotext").textContent="BUILD MY MP3 ZIP"; el("cancel").hidden=true; };
+      const startUI = () => { busy=true; el("go").disabled=true; el("gotext").textContent="CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
+      async function api(path, options) { const r=await fetch(apiUrl(path),{cache:"no-store",...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.error||("Server returned "+r.status)); return data; }
+      function skipped(items) { const list=el("skiplist"); list.replaceChildren(); if(!items||!items.length){el("skipped").hidden=true;return;} for(const message of items){const li=document.createElement("li");li.textContent=message;list.append(li);} el("skiptitle").textContent=items.length+" skipped track(s)"; el("skipped").hidden=false; }
+      function next() { clearTimeout(pollTimer); pollTimer=setTimeout(poll,1300); }
+      async function poll() {
+        if(!jobId)return;
+        try {
+          const s=await api("/api/jobs/"+encodeURIComponent(jobId));
+          retries=0;
+          el("count").textContent=s.total?(s.done+" / "+s.total+" TRACKS"):"SCANNING";
+          el("current").textContent=s.current||"";
+          skipped(s.failed);
+          if(s.status==="queued"||s.status==="reading") { el("stage").textContent="Reading playlist"; el("current").textContent="Finding available tracks…"; meter(2); }
+          else if(s.status==="downloading") { el("stage").textContent="Converting MP3 files"; meter(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3); }
+          else if(s.status==="zipping") { el("stage").textContent="Packaging your ZIP"; meter(97); }
+          else if(s.status==="complete") {
+            el("stage").textContent="Your ZIP is ready";
+            el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.title?" · "+s.title:"");
+            meter(100);
+            el("download").href=apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/download");
+            el("download").hidden=false;el("system").textContent="COMPLETE";safeStore(null);end();return;
+          }
+          else if(s.status==="error"||s.status==="cancelled") {
+            error(s.status==="cancelled"?"Conversion cancelled.":(s.error||"Conversion failed."));
+            el("stage").textContent=s.status==="cancelled"?"Cancelled":"Conversion failed";
+            el("system").textContent="READY TO RUN";safeStore(null);end();return;
+          }
+          next();
+        } catch(e) {
+          if(e.message.includes("expired")||e.message.includes("not found")) { safeStore(null);error("The previous conversion expired. Start a new one.");el("system").textContent="READY TO RUN";end();return; }
+          if(++retries<5){next();return;}
+          error("Cannot reach the converter: "+e.message+". Check the server and retry.");
+          el("system").textContent="OFFLINE";end();
+        }
+      }
+      el("paste").addEventListener("click",async()=>{try{el("url").value=await navigator.clipboard.readText();el("url").focus();clearError();}catch{el("url").focus();error("Clipboard access is unavailable here. Paste the link directly.");}});
+      el("form").addEventListener("submit",async event=>{
+        event.preventDefault();if(busy)return;
+        clearTimeout(pollTimer);jobId=null;retries=0;startUI();
+        const checked=document.querySelector('input[name="quality"]:checked');
+        try{
+          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:el("url").value.trim(),quality:checked?checked.value:"192"})});
+          jobId=job.id;safeStore(jobId);await poll();
+        }catch(e){error(e.message);el("system").textContent="READY TO RUN";end();}
+      });
+      el("cancel").addEventListener("click",async()=>{
+        if(!jobId||!busy)return;el("cancel").disabled=true;
+        try{await api("/api/jobs/"+encodeURIComponent(jobId),{method:"DELETE"});el("current").textContent="Stopping conversion…";}
+        catch(e){error(e.message);}
+        finally{el("cancel").disabled=false;}
+      });
+      if(NEEDS_API){
+        el("system").textContent="API NOT CONNECTED";
+        error("GitHub Pages is serving YUBSUB, but the audio converter is not connected yet. To enable MP3 downloads, deploy the Python converter backend and set YUBSUB_API_BASE_URL in this repository's Actions variables. See the GitHub README.");
+        el("go").disabled=true;
+        el("gotext").textContent="CONNECT CONVERTER FIRST";
+      }
+      const prior=NEEDS_API?null:savedJob();
+      if(prior&&/^[a-f0-9]{32}$/.test(prior)){jobId=prior;startUI();poll();}
+      if(!NEEDS_API) fetch(apiUrl("/api/health"),{cache:"no-store"}).then(r=>r.json()).then(info=>{
+        if(!info.ok){el("system").textContent="SETUP NEEDED";error("Converter setup is incomplete: FFmpeg and Deno 2.3+ (or Node 22+) must be installed. See the GitHub README.");}
+      }).catch(()=>{el("system").textContent="OFFLINE";error("The converter API is offline or unreachable. Start the local app server or check the deployed API URL and CORS configuration.");});
+    })();
+  </script>
+</body>
+</html>
