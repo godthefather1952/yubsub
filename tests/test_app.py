@@ -52,3 +52,21 @@ def test_fake_conversion(monkeypatch):
         assert job["succeeded"] == 2
         with zipfile.ZipFile(job["archive"]) as z:
             assert z.namelist() == ["001 - First.mp3", "002 - Second.mp3"]
+
+
+def test_github_pages_cors():
+    client = mod.app.test_client()
+    preflight = client.options(
+        "/api/jobs",
+        headers={
+            "Origin": "https://yubsub.godthefather1952.com",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "Content-Type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["Access-Control-Allow-Origin"] == "https://yubsub.godthefather1952.com"
+    assert "POST" in preflight.headers["Access-Control-Allow-Methods"]
+    assert "Content-Type" in preflight.headers["Access-Control-Allow-Headers"]
+    blocked = client.get("/api/health", headers={"Origin": "https://untrusted.invalid"})
+    assert "Access-Control-Allow-Origin" not in blocked.headers
