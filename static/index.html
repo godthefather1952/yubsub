@@ -169,7 +169,7 @@
       const el = name => document.getElementById(name);
       const JOB_KEY = "yubsub-active-job";
       const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
-      const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\\/+$/, "");
+      const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\/+$/, "");
       const NEEDS_API = !LOCAL && !API_ROOT;
       const apiUrl = path => API_ROOT + path;
       let jobId = null, pollTimer = null, busy = false, retries = 0;
