@@ -77,7 +77,7 @@ The server uses one Gunicorn process with background threads and temporary local
 
 ```sh
 python -m pip install -r requirements.txt pytest
-pytest -q
+python -m pytest -q
 ```
 
 `.github/workflows/tests.yml` also tests the backend and checks the frontend JavaScript syntax on GitHub.
