@@ -1,91 +1,120 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>yubsub – Playlist to MP3 Zip</title>
-<style>
-  :root{--bg:#0f1115;--card:#181b22;--fg:#e8eaf0;--mut:#8b91a1;--acc:#ff3d57;--ok:#2ecc71;--bd:#272b36}
-  @media (prefers-color-scheme:light){:root{--bg:#f4f5f8;--card:#fff;--fg:#14161c;--mut:#6a7080;--bd:#e0e3ea}}
-  *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);
-       font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
-  main{width:100%;max-width:560px;background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px}
-  h1{margin:0 0 4px;font-size:1.6rem}h1 span{color:var(--acc)}
-  p.sub{margin:0 0 20px;color:var(--mut)}
-  input,select,button{font:inherit;border-radius:10px;border:1px solid var(--bd);padding:12px 14px;background:transparent;color:var(--fg);width:100%}
-  .row{display:flex;gap:10px;margin-top:10px}
-  select{width:auto}
-  button{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600;cursor:pointer}
-  button:disabled{opacity:.5;cursor:not-allowed}
-  .bar{height:10px;background:var(--bd);border-radius:99px;overflow:hidden;margin-top:20px}
-  .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
-  #msg{margin-top:10px;color:var(--mut);font-size:.92rem;word-break:break-word}
-  #msg.err{color:var(--acc)}
-  a.dl{display:block;text-align:center;text-decoration:none;margin-top:16px;padding:12px;border-radius:10px;background:var(--ok);color:#fff;font-weight:600}
-  details{margin-top:12px;color:var(--mut);font-size:.85rem}
-  small{display:block;margin-top:20px;color:var(--mut);font-size:.78rem}
-  [hidden]{display:none!important}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101116">
+  <meta name="description" content="Convert your authorized YouTube playlist to a ZIP of MP3 files.">
+  <title>yubsub — playlist to MP3 ZIP</title>
+  <style>
+    :root{color-scheme:dark;--bg:#0c0e13;--panel:#191b24;--line:#373a47;--text:#f6f7fa;--muted:#9ba1ae;--hot:#ff4d65;--green:#37cca0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;color:var(--text);background:radial-gradient(ellipse at 18% 10%,#34202d 0,transparent 38%),radial-gradient(ellipse at 86% 86%,#1d2234 0,transparent 38%),var(--bg)}
+    input,button,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}a{color:inherit}
+    .wrap{max-width:1050px;margin:0 auto;padding:30px 24px 60px}
+    header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:82px}
+    .logo{display:flex;align-items:center;gap:10px;font-size:25px;font-weight:850;letter-spacing:-1.4px}.symbol{width:36px;height:36px;border-radius:12px;background:linear-gradient(120deg,#ff4d65,#a25ef7);display:grid;place-items:center;box-shadow:0 6px 24px #ff4d653a}.symbol svg{width:24px;height:24px}
+    .tag{font-size:11px;letter-spacing:.04em;padding:8px 13px;border:1px solid var(--line);color:var(--muted);border-radius:40px}
+    .hero{text-align:center;max-width:800px;margin:0 auto}.eyebrow{display:inline-flex;align-items:center;gap:8px;color:#ffb3bd;font-size:12px;font-weight:850;letter-spacing:.15em}.dot{width:7px;height:7px;border-radius:50%;background:var(--hot);box-shadow:0 0 13px var(--hot)}
+    h1{font-size:clamp(42px,7vw,78px);font-weight:850;line-height:1.04;letter-spacing:-.067em;margin:25px 0 19px}
+    h1 span{background:linear-gradient(115deg,#ff4d65,#ffa173);background-clip:text;color:transparent}
+    .sub{color:var(--muted);font-size:clamp(15px,2vw,19px);line-height:1.65;max-width:585px;margin:0 auto 40px}
+    .panel{max-width:710px;margin:0 auto;text-align:left;border:1px solid #454451;border-radius:24px;padding:28px;background:linear-gradient(130deg,#22212be8,#171a21ec);box-shadow:0 23px 80px #0009}
+    label{display:block;font-size:13px;font-weight:800;margin-bottom:10px}
+    .inputrow{display:flex;gap:7px;padding:6px;background:#0e1016;border:1px solid var(--line);border-radius:13px}.inputrow:focus-within{border-color:var(--hot)}
+    #url{min-width:0;flex:1;background:transparent;color:var(--text);border:0;outline:0;padding:11px;font-size:14px}#url::placeholder{color:#767c89}
+    .paste{border:1px solid #414452;border-radius:9px;padding:0 16px;color:var(--text);background:#2a2d37;font-size:13px;font-weight:750}
+    .settings{display:flex;align-items:center;justify-content:space-between;gap:18px;margin:24px 0 23px}.settings label{margin:0}.hint{color:var(--muted);font-size:12px;margin-top:6px}
+    select{min-width:143px;color:var(--text);background:#11131a;border:1px solid var(--line);border-radius:10px;padding:12px 13px}
+    .primary{width:100%;padding:17px;border:0;border-radius:12px;background:linear-gradient(115deg,#ff4d65,#f27262);color:#fff;font-size:15px;font-weight:850;box-shadow:0 8px 30px #ff4d6535}
+    .primary:hover:not(:disabled){filter:brightness(1.07)}
+    .results{background:#101218;border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:22px}
+    .topline{display:flex;align-items:center;justify-content:space-between;gap:10px}.topline b{font-size:14px}.topline small{color:var(--muted);font-size:12px;font-variant-numeric:tabular-nums}
+    .current{font-size:13px;color:var(--muted);margin:10px 0 0;overflow-wrap:anywhere}
+    .track{height:9px;background:#2c3039;border-radius:30px;overflow:hidden;margin:21px 0 9px}.track div{height:100%;width:0;background:linear-gradient(95deg,#ff4d65,#ffa17c);border-radius:30px;transition:width .35s}
+    .progressfoot{display:flex;align-items:center;justify-content:space-between;color:var(--muted);font-size:12px}
+    .cancel{background:transparent;border:0;color:#ff9dab;font-weight:750;padding:7px 0}
+    .download{display:flex;align-items:center;justify-content:center;margin-top:17px;background:#1baf84;border-radius:11px;color:white;text-decoration:none;font-weight:850;padding:14px}
+    .error{margin-top:15px;background:#4a202b;border:1px solid #a64556;border-radius:11px;padding:14px;color:#ffbec7;font-size:13px;overflow-wrap:anywhere}
+    details{margin-top:12px;color:var(--muted);font-size:12px}summary{cursor:pointer}li{margin:5px 0;overflow-wrap:anywhere}
+    .trust{display:flex;align-items:center;gap:9px;margin-top:17px;color:var(--muted);font-size:12px}.trust span{color:var(--green);font-size:18px}
+    .steps{max-width:850px;margin:75px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:18px}.step{padding:20px;background:#17192091;border:1px solid #303441;border-radius:17px}
+    .number{display:grid;place-items:center;width:35px;height:35px;border-radius:10px;background:#35252e;color:#ffabb6;font-weight:850;margin-bottom:14px}.step b{font-size:14px}.step p{color:var(--muted);font-size:13px;line-height:1.65;margin:7px 0 0}
+    footer{max-width:800px;margin:68px auto 0;color:#8c91a0;text-align:center;font-size:12px;line-height:1.8}
+    [hidden]{display:none!important}
+    @media(max-width:630px){.wrap{padding:21px 15px 38px}header{margin-bottom:62px}.tag{font-size:9px}.panel{padding:19px;border-radius:19px}.sub{margin-bottom:28px}.settings{align-items:flex-start}.settings>div{max-width:57%}select{min-width:117px;padding:11px 7px}.steps{grid-template-columns:1fr;gap:12px;margin-top:45px}.step{padding:16px}}
+    @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+  </style>
 </head>
 <body>
-<main>
-  <h1>yub<span>sub</span></h1>
-  <p class="sub">Paste a YouTube playlist link, get a ZIP of MP3s.</p>
-  <form id="f">
-    <input id="url" type="url" required placeholder="https://www.youtube.com/playlist?list=..." autocomplete="off">
-    <div class="row">
-      <select id="q" aria-label="Quality">
-        <option value="128">128 kbps</option>
-        <option value="192" selected>192 kbps</option>
-        <option value="256">256 kbps</option>
-        <option value="320">320 kbps</option>
-      </select>
-      <button id="go">Convert</button>
-    </div>
-  </form>
-  <div class="bar" id="barwrap" hidden><i id="bar"></i></div>
-  <div id="msg"></div>
-  <a class="dl" id="dl" hidden>Download ZIP</a>
-  <details id="fails" hidden><summary>Skipped tracks</summary><ul id="flist"></ul></details>
-  <small>Only download content you own or have permission to download.</small>
-</main>
+<div class="wrap">
+  <header><div class="logo"><span class="symbol"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 13V9m4 9V5m4 13V7m4 8V3m4 14v-7" fill="none" stroke="white" stroke-width="2.4" stroke-linecap="round"/></svg></span>yubsub</div><span class="tag">PLAYLIST → MP3 ZIP</span></header>
+  <main>
+    <section class="hero">
+      <div class="eyebrow"><span class="dot"></span> AUDIO, SIMPLIFIED</div>
+      <h1>Your playlist.<br><span>One download.</span></h1>
+      <p class="sub">Paste a YouTube playlist link. Convert available songs to MP3 and download every track in one organized ZIP.</p>
+      <div class="panel">
+        <form id="form">
+          <label for="url">YouTube playlist URL</label>
+          <div class="inputrow"><input id="url" type="url" inputmode="url" required autocomplete="off" spellcheck="false" placeholder="https://youtube.com/playlist?list=..."><button class="paste" id="paste" type="button">Paste</button></div>
+          <div class="settings"><div><label for="quality">MP3 quality</label><div class="hint">Higher bitrate = bigger file, not better source audio</div></div><select id="quality"><option value="128">128 kbps</option><option value="192" selected>192 kbps</option><option value="256">256 kbps</option><option value="320">320 kbps</option></select></div>
+          <button class="primary" id="go" type="submit">Convert playlist to ZIP →</button>
+        </form>
+        <div id="results" class="results" hidden aria-live="polite">
+          <div class="topline"><b id="stage">Starting conversion</b><small id="count">—</small></div>
+          <p id="current" class="current">Connecting…</p>
+          <div class="track" id="progress" role="progressbar" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div>
+          <div class="progressfoot"><span id="percent">0%</span><button id="cancel" class="cancel" type="button">Cancel</button></div>
+          <a id="download" class="download" href="#" hidden>↓ Download MP3 ZIP</a>
+          <details id="skipped" hidden><summary id="skiptitle">Skipped tracks</summary><ul id="skiplist"></ul></details>
+        </div>
+        <div class="error" id="error" role="alert" hidden></div>
+        <div class="trust"><span>✓</span> Public playlists work best. No signup needed.</div>
+      </div>
+    </section>
+    <section class="steps" aria-label="How it works">
+      <div class="step"><span class="number">01</span><b>Copy your playlist URL</b><p>Use a playlist link from YouTube or YouTube Music containing list=.</p></div>
+      <div class="step"><span class="number">02</span><b>Choose MP3 quality</b><p>Track-by-track conversion runs on the server behind this page.</p></div>
+      <div class="step"><span class="number">03</span><b>Download your ZIP</b><p>Get numbered MP3s and a list of anything that couldn't convert.</p></div>
+    </section>
+  </main>
+  <footer>Only download content you own or have permission to use. Some videos or hosted conversions may be blocked by YouTube. Temporary files are deleted after 30 minutes.</footer>
+</div>
 <script>
-const $=id=>document.getElementById(id);
-const API=(window.YUBSUB_API||"").replace(/\/$/,"");
-let timer;
-function msg(t,err){$("msg").textContent=t;$("msg").className=err?"err":""}
-$("f").addEventListener("submit",async e=>{
-  e.preventDefault();
-  clearInterval(timer);
-  $("dl").hidden=true;$("fails").hidden=true;$("barwrap").hidden=false;$("bar").style.width="2%";
-  $("go").disabled=true;msg("Starting…");
-  try{
-    const r=await fetch(API+"/api/start",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({url:$("url").value,quality:$("q").value})});
-    const j=await r.json();
-    if(!r.ok)throw new Error(j.error||"Failed to start");
-    poll(j.id);
-  }catch(x){msg(x.message,true);$("go").disabled=false;$("barwrap").hidden=true}
-});
-function poll(id){
-  timer=setInterval(async()=>{
+(function(){
+  "use strict";
+  const el = id => document.getElementById(id);
+  let id = null, timeout = null, busy = false, retries = 0;
+  function showError(message){el("error").textContent=message;el("error").hidden=false;}
+  function progress(value){const n=Math.max(0,Math.min(100,Math.round(value)));el("fill").style.width=n+"%";el("percent").textContent=n+"%";el("progress").setAttribute("aria-valuenow",String(n));}
+  function finish(){busy=false;el("go").disabled=false;el("go").textContent="Convert playlist to ZIP →";el("cancel").hidden=true;}
+  async function api(path,options){const r=await fetch(path,options);const j=await r.json().catch(()=>({}));if(!r.ok)throw Error(j.error||"Server error "+r.status);return j;}
+  function skips(items){const list=el("skiplist");list.replaceChildren();if(!items||!items.length){el("skipped").hidden=true;return;}items.forEach(s=>{const li=document.createElement("li");li.textContent=s;list.append(li);});el("skiptitle").textContent=items.length+" skipped track(s)";el("skipped").hidden=false;}
+  function next(){timeout=setTimeout(poll,1150);}
+  async function poll(){
+    if(!id)return;
     try{
-      const s=await (await fetch(API+"/api/status/"+id)).json();
-      if(s.error&&!s.status)throw new Error(s.error);
-      const pct=s.total?Math.max(2,Math.round(s.done/s.total*100)):2;
-      $("bar").style.width=pct+"%";
-      if(s.status==="downloading")msg(`(${s.done}/${s.total}) ${s.current||""}`);
-      else if(s.status==="zipping")msg("Zipping…");
-      else if(s.status==="done"){
-        clearInterval(timer);$("bar").style.width="100%";
-        msg(`Done: ${s.title}`);$("dl").href=API+"/api/zip/"+id;$("dl").hidden=false;$("go").disabled=false;
-        if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false}
-      }else if(s.status==="error"){clearInterval(timer);msg(s.error,true);$("go").disabled=false;
-        if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.slice(0,5).forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false;$("fails").open=true}}
-    }catch(x){clearInterval(timer);msg(x.message,true);$("go").disabled=false}
-  },1000);
-}
+      const s=await api("/api/jobs/"+encodeURIComponent(id));retries=0;
+      el("count").textContent=s.total?s.done+" / "+s.total+" tracks":"Scanning";
+      el("current").textContent=s.current||"";skips(s.failed);
+      if(s.status==="queued"||s.status==="reading"){el("stage").textContent="Reading playlist";el("current").textContent="Finding available tracks…";progress(2);}
+      else if(s.status==="downloading"){el("stage").textContent="Converting MP3s";progress(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3);}
+      else if(s.status==="zipping"){el("stage").textContent="Packing your ZIP";progress(97);}
+      else if(s.status==="complete"){el("stage").textContent="Your ZIP is ready";el("current").textContent=s.succeeded+" MP3(s) converted"+(s.title?" · "+s.title:"");progress(100);el("download").href="/api/jobs/"+encodeURIComponent(id)+"/download";el("download").hidden=false;finish();return;}
+      else if(s.status==="error"||s.status==="cancelled"){showError(s.status==="cancelled"?"Conversion cancelled.":s.error||"Conversion failed.");finish();return;}
+      next();
+    }catch(e){retries++;if(retries<4){next();return;}showError("Cannot connect to the server: "+e.message);finish();}
+  }
+  el("paste").addEventListener("click",async()=>{try{el("url").value=await navigator.clipboard.readText();el("url").focus();}catch{el("url").focus();showError("Clipboard unavailable. Paste directly into the input.");}});
+  el("form").addEventListener("submit",async e=>{
+    e.preventDefault();if(busy)return;
+    clearTimeout(timeout);busy=true;id=null;retries=0;el("results").hidden=false;el("error").hidden=true;el("download").hidden=true;el("skipped").hidden=true;el("cancel").hidden=false;el("go").disabled=true;el("go").textContent="Converting…";el("stage").textContent="Starting conversion";el("current").textContent="Connecting…";el("count").textContent="—";progress(1);
+    try{const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:el("url").value.trim(),quality:el("quality").value})});id=job.id;await poll();}
+    catch(err){showError(err.message);finish();}
+  });
+  el("cancel").addEventListener("click",async()=>{if(!id||!busy)return;el("cancel").disabled=true;try{await api("/api/jobs/"+encodeURIComponent(id),{method:"DELETE"});el("current").textContent="Cancelling…";}catch(e){showError(e.message);}finally{el("cancel").disabled=false;}});
+  fetch("/api/health").then(r=>r.json()).then(s=>{if(!s.ok)showError("Server missing FFmpeg or a JavaScript runtime (Deno/Node). See README.");}).catch(()=>showError("Unable to reach the converter server."));
+})();
 </script>
 </body>
 </html>

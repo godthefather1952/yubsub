@@ -1,44 +1,53 @@
-# yubsub
+# yubsub — YouTube playlist to MP3 ZIP
 
-Paste a YouTube playlist URL, get a ZIP of MP3s.
+A responsive single webpage with a tiny Flask backend. No accounts, database, build pipeline, third-party UI framework, bucket, or CORS required.
 
-## Run
-Requires Python 3.9+ and [ffmpeg](https://ffmpeg.org/) on your PATH.
+## What it does
 
-```bash
-pip install -r requirements.txt
-python app.py   # http://localhost:5000
-```
+Paste a YouTube or YouTube Music playlist URL containing a list= identifier, choose MP3 quality, and get one ZIP with numbered MP3 files. The page displays the playlist title, track-by-track progress, download progress, cancellation, skipped tracks, and a ZIP link. If any tracks fail, the ZIP includes a skipped-tracks.txt explanation. Jobs expire and files are removed after 30 minutes.
 
-Or with Docker:
+## Local installation
 
-```bash
-docker build -t yubsub . && docker run -p 5000:5000 yubsub
-```
+Install Python 3.10+, FFmpeg (including ffprobe) and **Deno 2.3+** (recommended; Node 22+ also works). A JavaScript runtime is required by recent yt-dlp for YouTube.
 
-Env: `PORT` (default 5000), `MAX_TRACKS` (default 100). Finished jobs are deleted after 1 hour.
-Keep `yt-dlp` updated (`pip install -U yt-dlp`) as YouTube changes often.
+    python -m pip install -r requirements.txt
+    python app.py
 
-Only download content you own or have permission to download.
+Open http://localhost:5000 in a browser.
 
-## Deploy online (one URL, one page)
-1. Push this repo to GitHub, then on [Render](https://render.com) choose **New > Blueprint** and select it (`render.yaml` is included). Any Docker host (Fly.io, Railway) works too.
-2. Open the URL Render gives you. The same service serves the page and the API.
+### Docker
 
-Optional: host `static/index.html` on GitHub Pages instead, set `window.YUBSUB_API = "https://your-backend"` in it, and set `CORS_ORIGIN=https://you.github.io` on the backend.
+Docker installs Python, FFmpeg and Deno automatically:
 
-Note: YouTube often blocks datacenter IPs. If downloads fail with "Sign in to confirm you're not a bot", run it from a home machine or supply cookies to yt-dlp.
+    docker build -t yubsub .
+    docker run --rm -p 5000:5000 yubsub
 
-## Windows
-Double-click `start.bat` (needs Python and ffmpeg: `winget install ffmpeg`).
+### Render (one public URL)
 
-## GitHub Codespaces
-Open the repo in a Codespace. The `.devcontainer` installs ffmpeg and dependencies and starts the app; open the forwarded port 5000. Or run `python app.py` manually.
+At https://dashboard.render.com/blueprints, create a Blueprint from this GitHub repository. render.yaml specifies a single Docker web service. Open its Render URL; the page and its API run together. You do not need GitHub Pages.
 
-## Fixing "Sign in to confirm you're not a bot"
-YouTube blocks cloud IPs (Codespaces, Render...) unless requests carry a logged-in session.
-1. In Chrome/Firefox, install a "Get cookies.txt LOCALLY" extension.
-2. Open youtube.com while logged in, export cookies in Netscape format.
-3. Save the file as `cookies.txt` in the project root (in Codespaces, drag it into the file explorer), then restart `python app.py`.
+**Cloud reliability warning:** YouTube routinely challenges or blocks datacenter IPs, including Render and GitHub Codespaces. Updating the site cannot guarantee YouTube extraction will work on a remote server. If you encounter bot verification, run locally from your own connection. Do not publish cookies or session credentials. Use only content you own or are authorized to download.
 
-It is auto-detected (or set `YT_COOKIES=/path/to/file`) and is git-ignored. Use a throwaway Google account: heavy automated downloading can get an account flagged. Never commit or share cookies.txt.
+## Optional local cookies
+
+For your own authorized YouTube session, place Netscape-format cookies.txt in the repository directory, or set YT_COOKIES to an absolute local path. Cookies are optional and both .gitignore and .dockerignore exclude the default file. Never commit cookies or paste them into issues.
+
+## Configuration
+
+- PORT: web port (5000)
+- MAX_TRACKS: tracks per job (50; hard maximum 200)
+- MAX_ACTIVE_JOBS: concurrent conversions per process (2; Render: 1)
+- MAX_ARCHIVE_MB: combined MP3 payload limit (400 MB)
+- MAX_TRACK_MB: per-track source file limit (60 MB)
+- YT_COOKIES: private local cookies file path (optional)
+
+This deliberately has one Gunicorn process with background threads and temporary local storage. It is not designed for heavy public traffic or horizontally scaled hosting.
+
+## Testing
+
+    python -m pip install -r requirements.txt pytest
+    pytest -q
+
+Automated tests mock yt-dlp and verify URL restrictions, API validation, and ZIP contents. Real YouTube playback/extraction depends on external access and must be tested with a public playlist you have rights to.
+
+**Important:** A browser-only YouTube audio downloader is not viable due to browser CORS restrictions and audio extraction requirements. The backend exists only to run yt-dlp + FFmpeg and deliver the archive.
