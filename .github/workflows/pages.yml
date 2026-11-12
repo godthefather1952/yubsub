@@ -36,7 +36,7 @@ jobs:
 
       - name: Prepare static site
         env:
-          API_BASE_URL: ${{ vars.YUBSUB_API_BASE_URL }}
+          API_BASE_URL: ${{ vars.YUBSUB_API_BASE_URL || 'https://yubsub.onrender.com' }}
         run: |
           mkdir -p _site/static
           cp static/index.html _site/index.html

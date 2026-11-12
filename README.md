@@ -20,28 +20,27 @@ This repository supports **both** GitHub Pages publishing options:
 
 The root `CNAME` contains the intended hostname. GitHub Pages **still requires configuring the custom domain in repository Settings**; a CNAME file alone does not change the repository's Pages settings.
 
-### Connect the actual conversion backend
+### Conversion engine — already connected to Render
 
-A Pages-only website **cannot** download arbitrary YouTube media, run FFmpeg, or create a ZIP. The frontend intentionally reports **API NOT CONNECTED** until a working backend is configured, rather than pretending a download succeeded.
+The converter already exists in your **My Workspace** as the Render web service **yubsub**:
 
-**Option A — public website that converts from your phone:**
+- API base: **https://yubsub.onrender.com**
+- Health endpoint: `https://yubsub.onrender.com/api/health`
+- Render dashboard: https://dashboard.render.com/web/srv-dbqi1ptbedkc73dm9v5g
+- Source branch: `claude/dreamy-keller-yy8w56`
+- Runtime: Docker (Python + yt-dlp + FFmpeg + Deno)
 
-1. Deploy this same repository as a Docker web service on Render (or another Docker host), using `Dockerfile` and the included `render.yaml`. GitHub Pages and the Docker backend are **separate services**. Render is hosting only the backend; it is **not** replacing GitHub Pages.
-2. Verify the backend's `https://<your-service>.onrender.com/api/health` endpoint returns `"ok": true`.
-3. Go to **[Repository Settings → Secrets and variables → Actions](https://github.com/godthefather1952/yubsub/settings/variables/actions)**, choose **Variables** → **New repository variable**, set:
-   - **Name:** `YUBSUB_API_BASE_URL`
-   - **Value:** your public backend HTTPS origin, e.g., `https://<your-service>.onrender.com` (no `/api` suffix).
-4. With GitHub Pages configured to build via **GitHub Actions**, run **Publish YUBSUB to GitHub Pages** again. It embeds the configured public API origin into the static page.
+The GitHub Pages frontend now points at this **existing backend** automatically:
+- **GitHub Actions deployment:** `.github/workflows/pages.yml` defaults `YUBSUB_API_BASE_URL` to `https://yubsub.onrender.com`, and also allows an optional repository variable of the same name to override it.
+- **Branch-based Pages deployment:** `static/config.js` already contains `https://yubsub.onrender.com` and the root `index.html` loads it.
 
-If you use branch-based Pages publishing instead, edit `static/config.js` and set `window.YUBSUB_API_BASE_URL` to your backend's HTTPS origin.
+You **do not need to create another Render service** or set an Actions variable for the current deployment.
 
-Backend CORS explicitly allows the origins `https://yubsub.godthefather1952.com` and `https://godthefather1952.github.io` (GitHub Pages default host). If you move the frontend, update `FRONTEND_ORIGINS` in `app.py`.
+GitHub Pages remains the public website at `https://yubsub.godthefather1952.com`; Render is only the conversion API. CORS on the backend allows the custom domain and the default `godthefather1952.github.io` origin.
 
-**Important:** YouTube frequently challenges or blocks cloud datacenter IPs. Neither Render nor any cloud host is guaranteed to support every playlist. Also, free hosts can sleep/restart and lose temporary jobs. Never publish session cookies.
+**Important:** The Render free service may take time to wake up after inactivity, and YouTube may challenge or block cloud datacenter IPs. Neither a successful deployment nor a passing mocked test guarantees actual playlist extraction; do an end-to-end test with a small playlist you have permission to download. Restarting/free-host sleep can erase temporary in-progress ZIP jobs. Never publish YouTube session cookies.
 
-**Option B — use the GitHub Pages design with a local converter:**
-
-Start the Flask app with Docker or Python (instructions below). The local Flask application serves the same YUBSUB page at `http://localhost:5000` and converts on your own computer. This is generally more reliable than using cloud datacenter IPs. The publicly hosted GitHub Pages version still needs a configured backend.
+**Local alternative:** Run the Docker service locally (below). The Flask app serves the same one-page interface at `http://localhost:5000` and processes audio through your own internet connection.
 
 ## Run locally — Docker
 
