@@ -102,6 +102,15 @@ def reaper():
 threading.Thread(target=reaper, daemon=True).start()
 
 
+@app.after_request
+def cors(resp):
+    origin = os.environ.get("CORS_ORIGIN")  # e.g. https://you.github.io (lets a static page call this API)
+    if origin:
+        resp.headers["Access-Control-Allow-Origin"] = origin
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    return resp
+
+
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")

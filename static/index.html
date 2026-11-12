@@ -52,6 +52,7 @@
 </main>
 <script>
 const $=id=>document.getElementById(id);
+const API=(window.YUBSUB_API||"").replace(/\/$/,"");
 let timer;
 function msg(t,err){$("msg").textContent=t;$("msg").className=err?"err":""}
 $("f").addEventListener("submit",async e=>{
@@ -60,7 +61,7 @@ $("f").addEventListener("submit",async e=>{
   $("dl").hidden=true;$("fails").hidden=true;$("barwrap").hidden=false;$("bar").style.width="2%";
   $("go").disabled=true;msg("Starting…");
   try{
-    const r=await fetch("/api/start",{method:"POST",headers:{"Content-Type":"application/json"},
+    const r=await fetch(API+"/api/start",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({url:$("url").value,quality:$("q").value})});
     const j=await r.json();
     if(!r.ok)throw new Error(j.error||"Failed to start");
@@ -70,7 +71,7 @@ $("f").addEventListener("submit",async e=>{
 function poll(id){
   timer=setInterval(async()=>{
     try{
-      const s=await (await fetch("/api/status/"+id)).json();
+      const s=await (await fetch(API+"/api/status/"+id)).json();
       if(s.error&&!s.status)throw new Error(s.error);
       const pct=s.total?Math.max(2,Math.round(s.done/s.total*100)):2;
       $("bar").style.width=pct+"%";
@@ -78,7 +79,7 @@ function poll(id){
       else if(s.status==="zipping")msg("Zipping…");
       else if(s.status==="done"){
         clearInterval(timer);$("bar").style.width="100%";
-        msg(`Done: ${s.title}`);$("dl").href="/api/zip/"+id;$("dl").hidden=false;$("go").disabled=false;
+        msg(`Done: ${s.title}`);$("dl").href=API+"/api/zip/"+id;$("dl").hidden=false;$("go").disabled=false;
         if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false}
       }else if(s.status==="error"){clearInterval(timer);msg(s.error,true);$("go").disabled=false}
     }catch(x){clearInterval(timer);msg(x.message,true);$("go").disabled=false}
