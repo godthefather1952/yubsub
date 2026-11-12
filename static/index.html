@@ -162,11 +162,16 @@
     <div class="footerlogo">yubsub<em>.</em> <span style="color:#979791;font-size:10px;font-weight:700">BY 2.WAV</span></div>
     <div class="legal">Only download audio you own or have permission to use. YouTube may restrict access to some videos or hosted servers. ZIPs are temporary and expire after 30 minutes. YUBSUB is an independent tool, not affiliated with YouTube.</div>
   </footer>
+  <script src="static/config.js"></script>
   <script>
     (() => {
       "use strict";
       const el = name => document.getElementById(name);
       const JOB_KEY = "yubsub-active-job";
+      const LOCAL = ["localhost", "127.0.0.1"].includes(location.hostname);
+      const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\\/+$/, "");
+      const NEEDS_API = !LOCAL && !API_ROOT;
+      const apiUrl = path => API_ROOT + path;
       let jobId = null, pollTimer = null, busy = false, retries = 0;
       const safeStore = (value) => { try { if(value) sessionStorage.setItem(JOB_KEY,value); else sessionStorage.removeItem(JOB_KEY); } catch {} };
       const savedJob = () => { try { return sessionStorage.getItem(JOB_KEY); } catch { return null; } };
@@ -175,7 +180,7 @@
       const meter = value => { const n = Math.max(0,Math.min(100,Math.round(value))); el("fill").style.width = n + "%"; el("percent").textContent = n + "%"; el("progress").setAttribute("aria-valuenow",String(n)); };
       const end = () => { busy=false; el("go").disabled=false; el("gotext").textContent="BUILD MY MP3 ZIP"; el("cancel").hidden=true; };
       const startUI = () => { busy=true; el("go").disabled=true; el("gotext").textContent="CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
-      async function api(path, options) { const r=await fetch(path,{cache:"no-store",...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.error||("Server returned "+r.status)); return data; }
+      async function api(path, options) { const r=await fetch(apiUrl(path),{cache:"no-store",...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.error||("Server returned "+r.status)); return data; }
       function skipped(items) { const list=el("skiplist"); list.replaceChildren(); if(!items||!items.length){el("skipped").hidden=true;return;} for(const message of items){const li=document.createElement("li");li.textContent=message;list.append(li);} el("skiptitle").textContent=items.length+" skipped track(s)"; el("skipped").hidden=false; }
       function next() { clearTimeout(pollTimer); pollTimer=setTimeout(poll,1300); }
       async function poll() {
@@ -193,7 +198,7 @@
             el("stage").textContent="Your ZIP is ready";
             el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.title?" · "+s.title:"");
             meter(100);
-            el("download").href="/api/jobs/"+encodeURIComponent(jobId)+"/download";
+            el("download").href=apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/download");
             el("download").hidden=false;el("system").textContent="COMPLETE";safeStore(null);end();return;
           }
           else if(s.status==="error"||s.status==="cancelled") {
@@ -225,11 +230,17 @@
         catch(e){error(e.message);}
         finally{el("cancel").disabled=false;}
       });
-      const prior=savedJob();
+      if(NEEDS_API){
+        el("system").textContent="API NOT CONNECTED";
+        error("GitHub Pages is serving YUBSUB, but the audio converter is not connected yet. To enable MP3 downloads, deploy the Python converter backend and set YUBSUB_API_BASE_URL in this repository's Actions variables. See the GitHub README.");
+        el("go").disabled=true;
+        el("gotext").textContent="CONNECT CONVERTER FIRST";
+      }
+      const prior=NEEDS_API?null:savedJob();
       if(prior&&/^[a-f0-9]{32}$/.test(prior)){jobId=prior;startUI();poll();}
-      fetch("/api/health",{cache:"no-store"}).then(r=>r.json()).then(info=>{
+      if(!NEEDS_API) fetch(apiUrl("/api/health"),{cache:"no-store"}).then(r=>r.json()).then(info=>{
         if(!info.ok){el("system").textContent="SETUP NEEDED";error("Converter setup is incomplete: FFmpeg and Deno 2.3+ (or Node 22+) must be installed. See the GitHub README.");}
-      }).catch(()=>{el("system").textContent="OFFLINE";error("The converter backend is offline. Start the app server before trying to convert a playlist.");});
+      }).catch(()=>{el("system").textContent="OFFLINE";error("The converter API is offline or unreachable. Start the local app server or check the deployed API URL and CORS configuration.");});
     })();
   </script>
 </body>
