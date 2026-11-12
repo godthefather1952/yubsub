@@ -17,6 +17,7 @@ import yt_dlp
 
 app = Flask(__name__, static_folder="static")
 
+COOKIES = os.environ.get("YT_COOKIES") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
 MAX_TRACKS = int(os.environ.get("MAX_TRACKS", "100"))
 JOB_TTL = 60 * 60  # seconds before finished jobs are deleted
 JOBS = {}
@@ -57,6 +58,7 @@ def run_job(job):
                 "quiet": True,
                 "no_warnings": True,
                 "noplaylist": True,
+                "no_color": True,
                 # newer YouTube needs a JS runtime + challenge solver to unlock audio formats
                 "js_runtimes": {"node": {}, "deno": {}},
                 "remote_components": ["ejs:github"],
@@ -67,6 +69,8 @@ def run_job(job):
                     {"key": "FFmpegMetadata"},
                 ],
             }
+            if os.path.exists(COOKIES):
+                opts["cookiefile"] = COOKIES
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
                     ydl.download([vid])
