@@ -6,3 +6,5 @@ services:
     envVars:
       - key: MAX_TRACKS
         value: "50"
+      - key: MAX_ACTIVE_JOBS
+        value: "1"
