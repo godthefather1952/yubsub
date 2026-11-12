@@ -28,3 +28,9 @@ Only download content you own or have permission to download.
 Optional: host `static/index.html` on GitHub Pages instead, set `window.YUBSUB_API = "https://your-backend"` in it, and set `CORS_ORIGIN=https://you.github.io` on the backend.
 
 Note: YouTube often blocks datacenter IPs. If downloads fail with "Sign in to confirm you're not a bot", run it from a home machine or supply cookies to yt-dlp.
+
+## Windows
+Double-click `start.bat` (needs Python and ffmpeg: `winget install ffmpeg`).
+
+## GitHub Codespaces
+Open the repo in a Codespace. The `.devcontainer` installs ffmpeg and dependencies and starts the app; open the forwarded port 5000. Or run `python app.py` manually.
