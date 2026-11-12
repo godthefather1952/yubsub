@@ -57,8 +57,11 @@ def run_job(job):
                 "quiet": True,
                 "no_warnings": True,
                 "noplaylist": True,
+                # newer YouTube needs a JS runtime + challenge solver to unlock audio formats
+                "js_runtimes": {"node": {}, "deno": {}},
+                "remote_components": ["ejs:github"],
                 "format": "bestaudio/best",
-                "outtmpl": os.path.join(work, name + ".%(ext)s"),
+                "outtmpl": os.path.join(work, name.replace("%", "%%") + ".%(ext)s"),
                 "postprocessors": [
                     {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": job["quality"]},
                     {"key": "FFmpegMetadata"},
@@ -73,11 +76,11 @@ def run_job(job):
                 else:
                     job["failed"].append(name)
             except Exception as ex:  # skip private/deleted videos
-                job["failed"].append(f"{name} ({str(ex)[:80]})")
+                job["failed"].append(f"{name} ({str(ex)[:300]})")
             update(job, done=i)
 
         if not files:
-            raise RuntimeError("No tracks could be downloaded.")
+            raise RuntimeError("No tracks could be downloaded. First error: " + (job["failed"][0] if job["failed"] else "unknown"))
         update(job, status="zipping")
         zpath = os.path.join(work, title + ".zip")
         with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:

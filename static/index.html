@@ -81,7 +81,8 @@ function poll(id){
         clearInterval(timer);$("bar").style.width="100%";
         msg(`Done: ${s.title}`);$("dl").href=API+"/api/zip/"+id;$("dl").hidden=false;$("go").disabled=false;
         if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false}
-      }else if(s.status==="error"){clearInterval(timer);msg(s.error,true);$("go").disabled=false}
+      }else if(s.status==="error"){clearInterval(timer);msg(s.error,true);$("go").disabled=false;
+        if(s.failed&&s.failed.length){$("flist").innerHTML="";s.failed.slice(0,5).forEach(f=>{const li=document.createElement("li");li.textContent=f;$("flist").append(li)});$("fails").hidden=false;$("fails").open=true}}
     }catch(x){clearInterval(timer);msg(x.message,true);$("go").disabled=false}
   },1000);
 }
