@@ -42,6 +42,28 @@ GitHub Pages remains the public website at `https://yubsub.godthefather1952.com`
 
 **Local alternative:** Run the Docker service locally (below). The Flask app serves the same one-page interface at `http://localhost:5000` and processes audio through your own internet connection.
 
+## Troubleshooting: YouTube "Failed to extract any player response"
+
+This error happens **before** MP3 conversion and ZIP creation. yt-dlp received no usable YouTube player API response. It can be caused by an upstream YouTube change, stale extractor/EJS scripts, restrictions on the host's public IP, or networking issues.
+
+**What the November 2026 repair does:**
+- Render's Docker image now updates `yt-dlp[default]` to the latest **nightly** available at build time (including compatible `yt-dlp-ejs` scripts).
+- The downloader allows the official GitHub-hosted EJS components when needed by the Deno JS runtime.
+- For this specific failure it retries with alternate officially supported YouTube player clients (`web,mweb,tv`).
+- It captures the underlying extractor error instead of reporting a misleading missing MP3.
+- Two consecutive player-response failures stop a playlist job early with an actionable message instead of attempting all 50 tracks.
+- `/api/health` exposes `yt_dlp_version` so you can confirm the server actually updated.
+
+**What it cannot fix:** If YouTube refuses requests from Render's public datacenter IP, no app update can guarantee downloads. Confirm by testing from your Mac or another authorized residential connection. You can run the exact same app locally using the Docker or Python commands below. Do not add browser cookies to GitHub, publicly hosted environment variables, or logs.
+
+To update a **local** Python installation with the same nightly-based yt-dlp release channel:
+
+```sh
+python -m pip install --upgrade --pre "yt-dlp[default]"
+```
+
+To confirm which version the **deployed server** uses, open `https://yubsub.onrender.com/api/health` and check the `yt_dlp_version` field. An `ok: true` health result only verifies required binaries, **not** that YouTube allows playback extraction.
+
 ## Run locally — Docker
 
 ```sh
