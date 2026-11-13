@@ -74,9 +74,53 @@ def update(job, **kwargs):
         job.update(kwargs)
 
 
+class ExtractorLogger:
+    """Keep yt-dlp's original extraction error so we can retry intelligently."""
+    def __init__(self):
+        self.errors = []
+
+    def debug(self, message):
+        pass
+
+    def warning(self, message):
+        pass
+
+    def error(self, message):
+        self.errors.append(str(message))
+
+
+def player_response_error(reason):
+    value = str(reason).lower()
+    return ("failed to extract any player response" in value
+            or "all player responses are invalid" in value)
+
+
+def download_video(video_id, options):
+    """Download one video, preserving the error that yt-dlp normally only logs."""
+    logger = ExtractorLogger()
+    options = dict(options, ignoreerrors=False, logger=logger)
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            result = ydl.download(["https://www.youtube.com/watch?v=" + video_id])
+        if result:
+            raise RuntimeError(logger.errors[-1] if logger.errors
+                               else "yt-dlp could not download this track.")
+        return result
+    except InterruptedError:
+        raise
+    except Exception as exc:
+        if logger.errors:
+            raise RuntimeError(logger.errors[-1]) from exc
+        raise
+
+
 def readable_error(exc):
     reason = str(exc).strip()
     lower = reason.lower()
+    if player_response_error(reason):
+        return ("YouTube is not providing playable video data to this server. "
+                "This may be a YouTube extractor change or a restriction on Render's IP. "
+                "Try again later or use YUBSUB locally. See README.")
     if any(x in lower for x in ("confirm you're not a bot", "sign in to confirm",
                                  "http error 429", "too many requests")):
         return ("YouTube blocked this machine or cloud IP. Try running Yubsub locally "
@@ -88,7 +132,9 @@ def readable_error(exc):
 
 def yt_options(**extra):
     opts = dict(quiet=True, no_warnings=True, no_color=True, socket_timeout=25,
-                retries=2, fragment_retries=2, extractor_retries=1)
+                retries=2, fragment_retries=2, extractor_retries=1,
+                # Allow yt-dlp to refresh JS solver components when YouTube changes.
+                remote_components=["ejs:github"])
     if COOKIE_FILE.is_file():
         opts["cookiefile"] = str(COOKIE_FILE)
     if shutil.which("deno"):
@@ -125,6 +171,7 @@ def run_job(job):
         update(job, status="downloading", title=title, total=len(entries))
         ready = []
         total_bytes = 0
+        consecutive_player_errors = 0
         for index, item in enumerate(entries, 1):
             check_cancel(job)
             track = safe_name(item.get("title"), "Track " + str(index))
@@ -153,8 +200,21 @@ def run_job(job):
                                    "preferredquality": job["quality"]},
                                   {"key": "FFmpegMetadata"}])
             try:
-                with yt_dlp.YoutubeDL(opts) as ydl:
-                    result = ydl.download(["https://www.youtube.com/watch?v=" + video_id])
+                try:
+                    result = download_video(video_id, opts)
+                except InterruptedError:
+                    raise
+                except Exception as first_error:
+                    if not player_response_error(first_error):
+                        raise
+                    # A second supported YouTube client set can recover when a
+                    # particular player API changes. Do not loop endlessly.
+                    check_cancel(job)
+                    alternate = dict(opts, extractor_args={
+                        "youtube": {"player_client": ["web", "mweb", "tv"]}
+                    })
+                    app.logger.info("Retrying %s with alternate YouTube clients", video_id)
+                    result = download_video(video_id, alternate)
                 check_cancel(job)
                 mp3 = Path(prefix + ".mp3")
                 if result or not mp3.is_file():
@@ -170,14 +230,23 @@ def run_job(job):
                     break
                 ready.append(mp3)
                 total_bytes += size
+                consecutive_player_errors = 0
                 update(job, succeeded=len(ready))
             except InterruptedError:
                 raise
             except Exception as exc:
+                consecutive_player_errors = (
+                    consecutive_player_errors + 1 if player_response_error(exc) else 0
+                )
+                app.logger.warning("Track %s failed: %s", video_id, exc)
                 with LOCK:
                     job["failed"].append(label + ": " + readable_error(exc))
             finally:
                 update(job, done=index, track_percent=0)
+            if consecutive_player_errors >= 2:
+                app.logger.warning("Stopped early: YouTube returned no usable player "
+                                   "response for two consecutive tracks")
+                break
         check_cancel(job)
         if not ready:
             first = job["failed"][0] if job["failed"] else "Unknown"
@@ -227,7 +296,8 @@ def home():
 def health():
     runtime = "deno" if shutil.which("deno") else ("node" if shutil.which("node") else None)
     return jsonify(ok=bool(runtime and shutil.which("ffmpeg") and shutil.which("ffprobe")),
-                   runtime=runtime, ffmpeg=bool(shutil.which("ffmpeg")))
+                   runtime=runtime, ffmpeg=bool(shutil.which("ffmpeg")),
+                   yt_dlp_version=yt_dlp.version.__version__)
 
 
 @app.post("/api/jobs")
