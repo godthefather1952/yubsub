@@ -3,7 +3,7 @@ name: Publish YUBSUB to GitHub Pages
 on:
   push:
     branches:
-      - claude/dreamy-keller-yy8w56
+      - main
     paths:
       - index.html
       - CNAME
