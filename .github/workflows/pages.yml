@@ -1,0 +1,64 @@
+name: Publish YUBSUB to GitHub Pages
+
+on:
+  push:
+    branches:
+      - claude/dreamy-keller-yy8w56
+    paths:
+      - index.html
+      - CNAME
+      - static/index.html
+      - static/config.js
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare static site
+        env:
+          API_BASE_URL: ${{ vars.YUBSUB_API_BASE_URL || 'https://yubsub.onrender.com' }}
+        run: |
+          mkdir -p _site/static
+          cp static/index.html _site/index.html
+          cp CNAME _site/CNAME
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          api_url = os.environ.get("API_BASE_URL", "").strip().rstrip("/")
+          if api_url and not api_url.startswith("https://"):
+              raise SystemExit("YUBSUB_API_BASE_URL must start with https://")
+          Path("_site/static/config.js").write_text(
+              "window.YUBSUB_API_BASE_URL = " + json.dumps(api_url) + ";\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

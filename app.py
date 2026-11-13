@@ -1,8 +1,5 @@
-"""yubsub: YouTube playlist -> MP3 zip downloader.
-
-Run:  python app.py   (needs ffmpeg on PATH)
-Only download content you have the right to download.
-"""
+"""yubsub: one-page playlist to MP3 ZIP. Download authorized content only."""
+import itertools
 import os
 import re
 import shutil
@@ -11,152 +8,287 @@ import threading
 import time
 import uuid
 import zipfile
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
-from flask import Flask, jsonify, request, send_file, send_from_directory
 import yt_dlp
+from flask import Flask, jsonify, request, send_file
 
-app = Flask(__name__, static_folder="static")
+ROOT = Path(__file__).resolve().parent
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024
 
-COOKIES = os.environ.get("YT_COOKIES") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "cookies.txt")
-MAX_TRACKS = int(os.environ.get("MAX_TRACKS", "100"))
-JOB_TTL = 60 * 60  # seconds before finished jobs are deleted
+# The UI is hosted on GitHub Pages, while this Python app runs separately.
+# Browser clients require explicit, narrow cross-origin access to the API.
+FRONTEND_ORIGINS = {
+    "https://yubsub.godthefather1952.com",
+    "https://godthefather1952.github.io",
+}
+
+
+@app.after_request
+def allow_pages_origin(response):
+    origin = request.headers.get("Origin")
+    if origin in FRONTEND_ORIGINS and request.path.startswith("/api/"):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        response.headers["Access-Control-Max-Age"] = "600"
+        response.headers.add("Vary", "Origin")
+    return response
+MAX_TRACKS = max(1, min(200, int(os.getenv("MAX_TRACKS", "50"))))
+MAX_ACTIVE = max(1, int(os.getenv("MAX_ACTIVE_JOBS", "2")))
+MAX_TOTAL = max(10, int(os.getenv("MAX_ARCHIVE_MB", "400"))) * 1024**2
+MAX_TRACK = max(5, int(os.getenv("MAX_TRACK_MB", "60"))) * 1024**2
+COOKIE_FILE = Path(os.getenv("YT_COOKIES", str(ROOT / "cookies.txt")))
 JOBS = {}
-LOCK = threading.Lock()
+LOCK = threading.RLock()
+FINAL = {"complete", "error", "cancelled"}
 
 
-def safe_name(s, fallback="track"):
-    s = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", s or "").strip(" .")
-    return (s or fallback)[:120]
+def playlist_url(raw):
+    """Accept only YouTube playlist identifiers, never arbitrary destination hosts."""
+    try:
+        u = urlsplit(raw.strip())
+        if u.scheme != "https" or u.username or u.password or u.port not in (None, 443):
+            return None
+        if u.hostname not in ("youtube.com", "www.youtube.com", "m.youtube.com",
+                              "music.youtube.com", "youtu.be", "www.youtu.be"):
+            return None
+        playlist_id = (parse_qs(u.query).get("list") or [""])[0]
+        if not re.fullmatch(r"[A-Za-z0-9_-]{10,128}", playlist_id):
+            return None
+        return "https://www.youtube.com/playlist?list=" + playlist_id
+    except (ValueError, AttributeError):
+        return None
 
 
-def update(job, **kw):
+def safe_name(value, fallback="playlist"):
+    value = re.sub(r'[\x00-\x1f\\/:*?"<>|]', "_", str(value or ""))
+    value = re.sub(r"\s+", " ", value).strip(" .")
+    return value[:115] or fallback
+
+
+def update(job, **kwargs):
     with LOCK:
-        job.update(kw)
+        job.update(kwargs)
+
+
+def readable_error(exc):
+    reason = str(exc).strip()
+    lower = reason.lower()
+    if any(x in lower for x in ("confirm you're not a bot", "sign in to confirm",
+                                 "http error 429", "too many requests")):
+        return ("YouTube blocked this machine or cloud IP. Try running Yubsub locally "
+                "or see README for optional authorized cookies.txt setup.")
+    if "ffmpeg" in lower:
+        return "FFmpeg is missing. Install FFmpeg and restart."
+    return reason[-350:] or "Unknown download error."
+
+
+def yt_options(**extra):
+    opts = dict(quiet=True, no_warnings=True, no_color=True, socket_timeout=25,
+                retries=2, fragment_retries=2, extractor_retries=1)
+    if COOKIE_FILE.is_file():
+        opts["cookiefile"] = str(COOKIE_FILE)
+    if shutil.which("deno"):
+        opts["js_runtimes"] = {"deno": {}}
+    elif shutil.which("node"):
+        opts["js_runtimes"] = {"node": {}}
+    opts.update(extra)
+    return opts
+
+
+def check_cancel(job):
+    if job["stop"].is_set():
+        raise InterruptedError("cancelled")
 
 
 def run_job(job):
-    work = job["dir"]
+    folder = Path(job["directory"])
     try:
-        base = {"quiet": True, "no_warnings": True, "extract_flat": "in_playlist", "skip_download": True}
-        with yt_dlp.YoutubeDL(base) as ydl:
+        if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
+            raise RuntimeError("FFmpeg is not installed.")
+        if not (shutil.which("deno") or shutil.which("node")):
+            raise RuntimeError("Deno 2.3+ (or Node 22+) is required for YouTube.")
+        update(job, status="reading")
+        with yt_dlp.YoutubeDL(yt_options(extract_flat="in_playlist", skip_download=True,
+                                         ignoreerrors=True, playlistend=MAX_TRACKS)) as ydl:
             info = ydl.extract_info(job["url"], download=False)
-        entries = [e for e in (info.get("entries") or [info]) if e]
-        entries = entries[:MAX_TRACKS]
-        title = safe_name(info.get("title"), "playlist")
-        update(job, total=len(entries), title=title, status="downloading")
+        check_cancel(job)
+        if not info or not info.get("entries"):
+            raise RuntimeError("Playlist is empty, private or unavailable.")
+        entries = list(itertools.islice((e for e in info["entries"] if e), MAX_TRACKS))
+        if not entries:
+            raise RuntimeError("No accessible tracks found.")
+        title = safe_name(info.get("title"), "YouTube playlist")
+        update(job, status="downloading", title=title, total=len(entries))
+        ready = []
+        total_bytes = 0
+        for index, item in enumerate(entries, 1):
+            check_cancel(job)
+            track = safe_name(item.get("title"), "Track " + str(index))
+            label = "{:03d} - {}".format(index, track)
+            update(job, done=index - 1, current=track, track_percent=0)
+            video_id = str(item.get("id") or "")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                with LOCK:
+                    job["failed"].append(label + ": invalid video ID")
+                update(job, done=index)
+                continue
+            prefix = str(folder / label)
+            template = prefix.replace("%", "%%") + ".%(ext)s"
 
-        files = []
-        for i, e in enumerate(entries, 1):
-            if job.get("cancel"):
-                raise RuntimeError("cancelled")
-            vid = e.get("url") or e.get("id")
-            if vid and not vid.startswith("http"):
-                vid = f"https://www.youtube.com/watch?v={vid}"
-            name = f"{i:03d} - {safe_name(e.get('title'), e.get('id'))}"
-            update(job, current=e.get("title") or name, done=i - 1)
-            opts = {
-                "quiet": True,
-                "no_warnings": True,
-                "noplaylist": True,
-                "no_color": True,
-                # newer YouTube needs a JS runtime + challenge solver to unlock audio formats
-                "js_runtimes": {"node": {}, "deno": {}},
-                "remote_components": ["ejs:github"],
-                "format": "bestaudio/best",
-                "outtmpl": os.path.join(work, name.replace("%", "%%") + ".%(ext)s"),
-                "postprocessors": [
-                    {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": job["quality"]},
-                    {"key": "FFmpegMetadata"},
-                ],
-            }
-            if os.path.exists(COOKIES):
-                opts["cookiefile"] = COOKIES
+            def progress(info):
+                check_cancel(job)
+                if info.get("status") == "downloading":
+                    total = info.get("total_bytes") or info.get("total_bytes_estimate")
+                    if total:
+                        update(job, track_percent=min(99, int(100 * info.get("downloaded_bytes", 0) / total)))
+
+            opts = yt_options(format="bestaudio/best", noplaylist=True,
+                              outtmpl=template, max_filesize=MAX_TRACK,
+                              progress_hooks=[progress], postprocessors=[
+                                  {"key": "FFmpegExtractAudio", "preferredcodec": "mp3",
+                                   "preferredquality": job["quality"]},
+                                  {"key": "FFmpegMetadata"}])
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    ydl.download([vid])
-                path = os.path.join(work, name + ".mp3")
-                if os.path.exists(path):
-                    files.append(path)
-                else:
-                    job["failed"].append(name)
-            except Exception as ex:  # skip private/deleted videos
-                job["failed"].append(f"{name} ({str(ex)[:300]})")
-            update(job, done=i)
-
-        if not files:
-            raise RuntimeError("No tracks could be downloaded. First error: " + (job["failed"][0] if job["failed"] else "unknown"))
-        update(job, status="zipping")
-        zpath = os.path.join(work, title + ".zip")
-        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_STORED) as z:
-            for f in files:
-                z.write(f, os.path.basename(f))
-        update(job, status="done", zip=zpath, zipname=title + ".zip", finished=time.time())
-    except Exception as ex:
-        update(job, status="error", error=str(ex)[:300], finished=time.time())
+                    result = ydl.download(["https://www.youtube.com/watch?v=" + video_id])
+                check_cancel(job)
+                mp3 = Path(prefix + ".mp3")
+                if result or not mp3.is_file():
+                    raise RuntimeError("No MP3 output was produced.")
+                size = mp3.stat().st_size
+                if not size or size > MAX_TRACK:
+                    mp3.unlink(missing_ok=True)
+                    raise RuntimeError("Track exceeded size limit.")
+                if total_bytes + size > MAX_TOTAL:
+                    mp3.unlink(missing_ok=True)
+                    with LOCK:
+                        job["failed"].append(label + ": archive size limit reached")
+                    break
+                ready.append(mp3)
+                total_bytes += size
+                update(job, succeeded=len(ready))
+            except InterruptedError:
+                raise
+            except Exception as exc:
+                with LOCK:
+                    job["failed"].append(label + ": " + readable_error(exc))
+            finally:
+                update(job, done=index, track_percent=0)
+        check_cancel(job)
+        if not ready:
+            first = job["failed"][0] if job["failed"] else "Unknown"
+            raise RuntimeError("No tracks could be converted. " + first)
+        update(job, status="zipping", current="Packaging MP3 files")
+        zip_path = folder / (title + ".zip")
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as bundle:
+            for file in ready:
+                check_cancel(job)
+                bundle.write(file, file.name)
+            if job["failed"]:
+                bundle.writestr("skipped-tracks.txt", "\n".join(job["failed"]) + "\n")
+        for file in ready:
+            file.unlink(missing_ok=True)
+        update(job, status="complete", archive=str(zip_path), finished=time.time(),
+               current="", track_percent=100)
+    except InterruptedError:
+        update(job, status="cancelled", finished=time.time(), current="")
+    except Exception as exc:
+        app.logger.warning("Conversion failed: %s", exc)
+        update(job, status="error", error=readable_error(exc), finished=time.time(), current="")
+    finally:
+        if job["status"] != "complete":
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 def reaper():
     while True:
-        time.sleep(300)
-        now = time.time()
+        time.sleep(60)
         with LOCK:
-            old = [k for k, j in JOBS.items() if j.get("finished") and now - j["finished"] > JOB_TTL]
-            for k in old:
-                shutil.rmtree(JOBS[k]["dir"], ignore_errors=True)
-                del JOBS[k]
+            expired = [jid for jid, j in JOBS.items()
+                       if j["finished"] and time.time() - j["finished"] > 1800]
+            for jid in expired:
+                shutil.rmtree(JOBS[jid]["directory"], ignore_errors=True)
+                del JOBS[jid]
 
 
 threading.Thread(target=reaper, daemon=True).start()
 
 
-@app.after_request
-def cors(resp):
-    origin = os.environ.get("CORS_ORIGIN")  # e.g. https://you.github.io (lets a static page call this API)
-    if origin:
-        resp.headers["Access-Control-Allow-Origin"] = origin
-        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    return resp
-
-
 @app.get("/")
-def index():
-    return send_from_directory("static", "index.html")
+def home():
+    return send_file(ROOT / "static/index.html")
 
 
-@app.post("/api/start")
+@app.get("/api/health")
+def health():
+    runtime = "deno" if shutil.which("deno") else ("node" if shutil.which("node") else None)
+    return jsonify(ok=bool(runtime and shutil.which("ffmpeg") and shutil.which("ffprobe")),
+                   runtime=runtime, ffmpeg=bool(shutil.which("ffmpeg")))
+
+
+@app.post("/api/jobs")
 def start():
-    data = request.get_json(silent=True) or {}
-    url = (data.get("url") or "").strip()
-    if not re.match(r"^https?://(www\.|m\.|music\.)?(youtube\.com|youtu\.be)/", url):
-        return jsonify(error="Please enter a valid YouTube playlist URL."), 400
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(error="Submit a YouTube playlist URL."), 400
+    url = playlist_url(str(data.get("url", "")))
+    if not url:
+        return jsonify(error="Enter a YouTube playlist link containing list=."), 400
     quality = str(data.get("quality", "192"))
     if quality not in {"128", "192", "256", "320"}:
-        quality = "192"
-    jid = uuid.uuid4().hex
-    job = {"id": jid, "url": url, "quality": quality, "status": "starting", "total": 0, "done": 0,
-           "current": "", "failed": [], "dir": tempfile.mkdtemp(prefix="yubsub_")}
+        return jsonify(error="Invalid MP3 bitrate."), 400
     with LOCK:
+        if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
+            return jsonify(error="Converter is busy. Try again shortly."), 429
+        jid = uuid.uuid4().hex
+        job = dict(id=jid, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
+                   stop=threading.Event(), status="queued", title="", current="",
+                   total=0, done=0, succeeded=0, track_percent=0, failed=[],
+                   error=None, archive=None, finished=None)
         JOBS[jid] = job
     threading.Thread(target=run_job, args=(job,), daemon=True).start()
-    return jsonify(id=jid)
+    return jsonify(id=jid), 202
 
 
-@app.get("/api/status/<jid>")
+@app.get("/api/jobs/<jid>")
 def status(jid):
-    job = JOBS.get(jid)
-    if not job:
-        return jsonify(error="Unknown job"), 404
-    keys = ("status", "total", "done", "current", "failed", "error", "title")
-    return jsonify({k: job.get(k) for k in keys})
+    with LOCK:
+        job = JOBS.get(jid)
+        if not job:
+            return jsonify(error="Job not found or expired."), 404
+        fields = ("id", "status", "title", "current", "total", "done", "succeeded",
+                  "track_percent", "failed", "error")
+        return jsonify({key: job[key] for key in fields})
 
 
-@app.get("/api/zip/<jid>")
-def get_zip(jid):
-    job = JOBS.get(jid)
-    if not job or job.get("status") != "done":
-        return jsonify(error="Not ready"), 404
-    return send_file(job["zip"], as_attachment=True, download_name=job["zipname"])
+@app.delete("/api/jobs/<jid>")
+def cancel(jid):
+    with LOCK:
+        job = JOBS.get(jid)
+        if not job:
+            return jsonify(error="Job not found or expired."), 404
+        if job["status"] in FINAL:
+            return jsonify(error="Job already finished."), 409
+        job["stop"].set()
+    return jsonify(message="Cancellation requested."), 202
+
+
+@app.get("/api/jobs/<jid>/download")
+def download(jid):
+    with LOCK:
+        job = JOBS.get(jid)
+        if not job or job["status"] != "complete":
+            return jsonify(error="ZIP is not ready or has expired."), 404
+        path, title = job["archive"], job["title"]
+    if not Path(path).is_file():
+        return jsonify(error="ZIP expired."), 410
+    return send_file(path, as_attachment=True, download_name=safe_name(title) + ".zip",
+                     mimetype="application/zip", max_age=0)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "5000")))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "5000")), threaded=True)
