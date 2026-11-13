@@ -70,3 +70,63 @@ def test_github_pages_cors():
     assert "Content-Type" in preflight.headers["Access-Control-Allow-Headers"]
     blocked = client.get("/api/health", headers={"Origin": "https://untrusted.invalid"})
     assert "Access-Control-Allow-Origin" not in blocked.headers
+
+
+def test_extractor_runtime_options(monkeypatch):
+    monkeypatch.setattr(mod.shutil, "which", lambda program: "/usr/bin/fake")
+    opts = mod.yt_options()
+    assert opts["remote_components"] == ["ejs:github"]
+    assert "deno" in opts["js_runtimes"]
+    assert mod.player_response_error("Failed to extract any player response")
+    assert not mod.player_response_error("FFmpeg is missing")
+
+
+def test_error_logging_keeps_youtube_failure(monkeypatch):
+    class FakeYDL:
+        def __init__(self, opts): self.opts = opts
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def download(self, urls):
+            self.opts["logger"].error("ERROR: [youtube] failed to extract any player response")
+            return 1
+
+    monkeypatch.setattr(mod.yt_dlp, "YoutubeDL", FakeYDL)
+    import pytest
+    with pytest.raises(RuntimeError, match="failed to extract any player response"):
+        mod.download_video("abcdefghijk", {})
+
+
+def test_player_response_fallback_and_stop(monkeypatch):
+    attempts = []
+    class FakeYDL:
+        def __init__(self, opts): self.opts = opts
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def extract_info(self, *args, **kwargs):
+            return {"title": "Blocked", "entries": [
+                {"id": "abcdefghijk", "title": "First"},
+                {"id": "lmnopqrstuv", "title": "Second"},
+                {"id": "abcdefghijZ", "title": "Third"}]}
+        def download(self, urls):
+            attempts.append(self.opts.get("extractor_args"))
+            self.opts["logger"].error(
+                "ERROR: [youtube] Failed to extract any player response")
+            return 1
+
+    monkeypatch.setattr(mod.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(mod.yt_dlp, "YoutubeDL", FakeYDL)
+    with tempfile.TemporaryDirectory() as directory:
+        folder = Path(directory, "job")
+        folder.mkdir()
+        job = dict(id="blocked", url="https://youtube.com/playlist?list=PL1234567890123",
+                   directory=str(folder), stop=threading.Event(),
+                   quality="192", status="queued", title="", current="",
+                   total=0, done=0, succeeded=0, track_percent=0, failed=[],
+                   error=None, archive=None, finished=None)
+        mod.run_job(job)
+        assert job["status"] == "error"
+        assert len(job["failed"]) == 2
+        assert job["done"] == 2
+        assert len(attempts) == 4  # original + alternate client for two tracks
+        assert attempts[1] == {"youtube": {"player_client": ["web", "mweb", "tv"]}}
+        assert "YouTube is not providing playable video data" in job["error"]
