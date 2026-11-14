@@ -1,5 +1,14 @@
 # YUBSUB — Playlist in. MP3s out.
 
+## Download YUBSUB for Mac (no coding required)
+
+**[Download the Mac first-time installer ZIP](https://github.com/godthefather1952/yubsub/releases/download/mac-v0.1.0/YUBSUB-Mac-First-Time-Installer.zip)**
+
+Unzip it, then double-click **Install YUBSUB.command**. The installer sets up required local dependencies, downloads the application from this repository, and puts a **Launch YUBSUB.command** shortcut on your Desktop. Then just double-click the launcher whenever you want to convert playlists at `http://127.0.0.1:8000`. The Mac must be awake while converting; the local server is not publicly exposed.
+
+If macOS asks, right-click the installer and choose **Open**. Installing missing system packages may require administrator approval. This release is intended for macOS and has been syntax/packaging tested, but has not been verified on every macOS version or a fresh machine.
+
+
 **YUBSUB by 2.wav** is a black-and-yellow branded YouTube / YouTube Music playlist-to-MP3 ZIP tool.
 
 ## Website: GitHub Pages at yubsub.godthefather1952.com
