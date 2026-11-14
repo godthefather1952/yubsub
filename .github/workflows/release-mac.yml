@@ -1,0 +1,70 @@
+name: Publish YUBSUB Mac Installer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "mac-installer/**"
+      - ".github/workflows/release-mac.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: yubsub-mac-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v4
+
+      - name: Validate installer shell scripts
+        shell: bash
+        run: |
+          bash -n "mac-installer/Install YUBSUB.command"
+          bash -n "mac-installer/Launch YUBSUB.command"
+          bash -n "mac-installer/install.sh"
+          test -s "mac-installer/requirements.txt"
+          test -s "mac-installer/README - START HERE.txt"
+          grep -q '127.0.0.1:8000' "mac-installer/Launch YUBSUB.command"
+          grep -q 'https://github.com/godthefather1952/yubsub/archive/refs/heads/main.zip' "mac-installer/install.sh"
+
+      - name: Assemble one-click installer ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          pkg="dist/YUBSUB Mac Installer"
+          mkdir -p "$pkg"
+          cp "mac-installer/Install YUBSUB.command" \
+             "mac-installer/Launch YUBSUB.command" \
+             "mac-installer/install.sh" \
+             "mac-installer/requirements.txt" \
+             "mac-installer/README - START HERE.txt" "$pkg/"
+          chmod +x "$pkg/Install YUBSUB.command" "$pkg/Launch YUBSUB.command" "$pkg/install.sh"
+          cd dist
+          zip -q -r -y "YUBSUB-Mac-First-Time-Installer.zip" "YUBSUB Mac Installer"
+          unzip -t -q "YUBSUB-Mac-First-Time-Installer.zip"
+          sha256sum "YUBSUB-Mac-First-Time-Installer.zip" > SHA256SUMS.txt
+
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="mac-v0.1.0"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists; leaving the published asset unchanged."
+            exit 0
+          fi
+          gh release create "$version" \
+            "dist/YUBSUB-Mac-First-Time-Installer.zip" \
+            "dist/SHA256SUMS.txt" \
+            --target "$GITHUB_SHA" \
+            --title "YUBSUB for Mac v0.1.0 — One-Click Installer" \
+            --notes-file "mac-installer/RELEASE_NOTES.md"
