@@ -1,4 +1,4 @@
-# YUBSUB Desktop v0.2.0 beta — a standalone macOS application
+# YUBSUB Desktop v0.2.0 — standalone macOS application
 
 **No Terminal, Homebrew, Python or pip required.** The YUBSUB application contains its own Python runtime and libraries, yt-dlp + the matching EJS scripts, Deno, FFmpeg and FFprobe.
 
@@ -10,7 +10,7 @@ Unzip the appropriate archive, drag **YUBSUB.app** into the **Applications** fol
 
 The app listens only on a randomly selected `127.0.0.1` port. It never exposes an internet-facing API. Max 200 tracks and 1.2 GB of ZIP output per conversion. All media downloads are processed on your Mac.
 
-## Beta limitations
+## Compatibility and limitations
 
 - **Unsigned/unnotarized:** Apple's Gatekeeper may block the app initially. Use Finder's Open command and macOS Privacy & Security controls if you trust the release. There is no supported way to eliminate the warning for all users without Apple Developer ID signing and notarization. Do **not** disable Gatekeeper globally.
 - **macOS compatibility:** Built on GitHub-hosted macOS 15 runners for both CPU architectures. Older systems (including macOS 12) require actual device testing and may not run all packaged components.
