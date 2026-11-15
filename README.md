@@ -1,10 +1,10 @@
 # YUBSUB — Playlist in. MP3s out.
 
-## Standalone YUBSUB desktop app (Mac beta)
+## YUBSUB desktop app — macOS
 
-**[Get the standalone YUBSUB.app beta](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.2.0-beta.1)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
+**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.2.0)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
 
-This beta is unsigned (Apple Gatekeeper may warn) and has been built on macOS 15 runners; test compatibility with older Macs before broad distribution. See [Mac app build details](mac-app/README.md). The older first-time Terminal-based Mac installer remains below for compatibility.
+This release is unsigned (Apple Gatekeeper may warn) and has been built on macOS 15 runners; compatibility with older Macs, including macOS 12, has not been verified on a real device. See [Mac app build details](mac-app/README.md). The older first-time Terminal-based Mac installer remains below for compatibility.
 
 ## Download YUBSUB for Mac (no coding required)
 
