@@ -1,0 +1,106 @@
+name: Build standalone YUBSUB for macOS
+
+on:
+  pull_request:
+    paths:
+      - "mac_app.py"
+      - "app.py"
+      - "requirements.txt"
+      - "static/**"
+      - "mac-app/**"
+      - ".github/workflows/mac-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "mac_app.py"
+      - "app.py"
+      - "requirements.txt"
+      - "static/**"
+      - "mac-app/**"
+      - ".github/workflows/mac-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Mac standalone (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: Intel
+            runner: macos-15-intel
+            filename: YUBSUB-macOS-Intel.zip
+          - arch: Apple-Silicon
+            runner: macos-15
+            filename: YUBSUB-macOS-Apple-Silicon.zip
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate app and build scripts
+        run: |
+          python -m py_compile mac_app.py mac-app/make_icon.py
+          bash -n mac-app/build_macos.sh
+
+      - name: Build all dependencies into YUBSUB.app
+        run: bash mac-app/build_macos.sh
+
+      - name: Package macOS .app and preserve symlinks
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/YUBSUB.app "dist/${{ matrix.filename }}"
+          unzip -t -q "dist/${{ matrix.filename }}"
+
+      - name: Upload app ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: YUBSUB-${{ matrix.arch }}
+          path: dist/${{ matrix.filename }}
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish macOS beta release
+    needs: [build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: YUBSUB-*
+          path: release
+          merge-multiple: true
+
+      - name: Generate SHA256 checksums
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum YUBSUB-macOS-Intel.zip YUBSUB-macOS-Apple-Silicon.zip > SHA256SUMS.txt
+
+      - name: Create GitHub beta Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="mac-app-v0.2.0-beta.1"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; no changes made."
+            exit 0
+          fi
+          gh release create "$tag" \
+            release/YUBSUB-macOS-Intel.zip \
+            release/YUBSUB-macOS-Apple-Silicon.zip \
+            release/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "YUBSUB Desktop v0.2.0 Beta — macOS" \
+            --prerelease \
+            --notes-file mac-app/RELEASE_NOTES.md
