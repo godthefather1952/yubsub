@@ -8,7 +8,7 @@ At GitHub build time, `pip install -r requirements.txt` installs Flask, yt-dlp a
 
 **At user launch time, nothing is installed.** YUBSUB opens as a normal app; the Python interpreter and packages are already inside. The app processes authorized audio directly on the user's Mac.
 
-There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes an unsigned beta release automatically.
+There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes the unsigned v0.2.0 release automatically.
 
 ## Build locally on a Mac
 
