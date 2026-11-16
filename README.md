@@ -2,9 +2,9 @@
 
 ## YUBSUB desktop app — macOS
 
-**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.2.0)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
+**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.3.0)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
 
-This release is unsigned (Apple Gatekeeper may warn) and has been built on macOS 15 runners; compatibility with older Macs, including macOS 12, has not been verified on a real device. See [Mac app build details](mac-app/README.md). The older first-time Terminal-based Mac installer remains below for compatibility.
+**New in v0.3.0:** In the conversion studio, switch between **Playlist** (default; downloads numbered MP3s in one ZIP) and **Single Video** (downloads one MP3 file directly). Accepts standard YouTube watch, short, live and youtu.be links in single-video mode. The rest of the workflow, bitrate choices, and local privacy remain unchanged.\n\nThis release is unsigned (Apple Gatekeeper may warn) and has been built on macOS 15 runners; compatibility with older Macs, including macOS 12, has not been verified on a real device. See [Mac app build details](mac-app/README.md). The older first-time Terminal-based Mac installer remains below for compatibility.
 
 ## Download YUBSUB for Mac (no coding required)
 
