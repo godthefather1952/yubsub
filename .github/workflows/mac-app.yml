@@ -37,6 +37,8 @@ jobs:
             runner: macos-15
             filename: YUBSUB-macOS-Apple-Silicon.zip
     runs-on: ${{ matrix.runner }}
+    env:
+      SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
     steps:
       - uses: actions/checkout@v4
 
@@ -46,8 +48,8 @@ jobs:
 
       - name: Validate app and build scripts
         run: |
-          python -m py_compile mac_app.py mac-app/make_icon.py
-          bash -n mac-app/build_macos.sh
+          python -m py_compile mac_app.py mac-app/make_icon.py mac-app/sparkle_updater.py
+          bash -n mac-app/build_macos.sh mac-app/create_update_key.sh
 
       - name: Build all dependencies into YUBSUB.app
         run: bash mac-app/build_macos.sh
@@ -79,6 +81,31 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Require trustworthy update-signing keys
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_PRIVATE_KEY" || -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+            echo "::error::Secure updates require SPARKLE_PRIVATE_KEY (Actions secret) and SPARKLE_PUBLIC_ED_KEY (Actions variable). No unsigned release will be published."
+            exit 1
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sign archives and create authenticated Sparkle appcasts
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        run: |
+          python -m pip install 'cryptography>=44,<49'
+          version="$(tr -d '[:space:]' < mac-app/VERSION)"
+          python mac-app/sign_release.py release "$version"
+
       - name: Generate SHA256 checksums
         run: |
           set -euo pipefail
@@ -91,7 +118,8 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="mac-app-v0.3.0"
+          version="$(tr -d '[:space:]' < mac-app/VERSION)"
+          tag="mac-app-v${version}"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; no changes made."
             exit 0
@@ -100,7 +128,9 @@ jobs:
             release/YUBSUB-macOS-Intel.zip \
             release/YUBSUB-macOS-Apple-Silicon.zip \
             release/SHA256SUMS.txt \
+            release/appcast-Intel.xml \
+            release/appcast-Apple-Silicon.xml \
             --target "$GITHUB_SHA" \
-            --title "YUBSUB Desktop v0.3.0 — macOS" \
+            --title "YUBSUB Desktop v${version} — macOS" \
             --latest \
             --notes-file mac-app/RELEASE_NOTES.md
