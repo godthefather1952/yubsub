@@ -43,6 +43,10 @@
     .workspace-title{font-size:15px;font-weight:950;letter-spacing:.01em;display:flex;align-items:center;gap:9px}
     .workspace-title svg{width:19px;height:19px;color:var(--yellow)}
     .live{font-size:10px;font-weight:850;letter-spacing:.14em;padding:7px 10px;border-radius:40px;background:#353525;color:#e3d675;white-space:nowrap}
+    .workspace-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+    .update-button{border:1px solid #62604c;color:var(--yellow);background:#202016;border-radius:9px;padding:8px 10px;white-space:nowrap;font-size:10px;font-weight:900;letter-spacing:.055em}
+    .update-button:focus-visible{outline:2px solid white;outline-offset:2px}
+    #updates[hidden]{display:none}
     .workspace-body{padding:27px 28px 29px}
     .field-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     label,.mode-heading{font-size:12px;letter-spacing:.025em;font-weight:850}
@@ -129,7 +133,7 @@
       <section class="workspace" aria-label="Playlist converter">
         <div class="workspace-head">
           <span class="workspace-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><path d="M4 5h16M4 10h12M4 15h8M4 20h6"/><path d="m16 15 5 3-5 3z"/></svg> CONVERSION STUDIO</span>
-          <span class="live" id="system">READY TO RUN</span>
+          <div class="workspace-actions"><button class="update-button" type="button" id="updates" hidden>CHECK FOR UPDATES</button><span class="live" id="system">READY TO RUN</span></div>
         </div>
         <div class="workspace-body">
           <form id="form">
@@ -246,6 +250,21 @@
           el("system").textContent="OFFLINE";end();
         }
       }
+      // Only the native macOS app exposes this bridge. The GitHub Pages
+      // converter never displays a nonfunctional update button.
+      window.addEventListener("pywebviewready",async()=>{
+        try {
+          if(await window.pywebview.api.available()) el("updates").hidden=false;
+        } catch {}
+      });
+      el("updates").addEventListener("click",async()=>{
+        if(busy){error("Finish or cancel the current conversion before updating.");return;}
+        clearError();
+        try {
+          const result=await window.pywebview.api.check();
+          if(!result.ok)error(result.error||"Update check could not start.");
+        } catch(e){error("Unable to check for updates: "+e.message);}
+      });
       el("paste").addEventListener("click",async()=>{try{el("url").value=await navigator.clipboard.readText();el("url").focus();clearError();}catch{el("url").focus();error("Clipboard access is unavailable here. Paste the link directly.");}});
       el("form").addEventListener("submit",async event=>{
         event.preventDefault();if(busy)return;
