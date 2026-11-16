@@ -45,7 +45,7 @@
     .live{font-size:10px;font-weight:850;letter-spacing:.14em;padding:7px 10px;border-radius:40px;background:#353525;color:#e3d675;white-space:nowrap}
     .workspace-body{padding:27px 28px 29px}
     .field-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
-    label{font-size:12px;letter-spacing:.025em;font-weight:850}
+    label,.mode-heading{font-size:12px;letter-spacing:.025em;font-weight:850}
     .num{color:var(--yellow);font-size:11px;letter-spacing:.1em;margin-right:9px}
     .field-help{font-size:11px;color:#999b9a}
     .urlrow{display:flex;align-items:center;padding:7px;background:#0b0d0f;border:1px solid #505053;border-radius:13px;transition:border-color .2s}
@@ -54,6 +54,16 @@
     #url::placeholder{color:#767878}
     .paste{border:1px solid #545453;background:#26282b;color:#f3f1e6;border-radius:9px;font-size:11px;font-weight:850;padding:12px 15px;white-space:nowrap}
     .paste:hover{background:#373a3e}
+    .mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:27px}
+    .mode-option{display:block;cursor:pointer;position:relative}
+    .mode-option input{position:absolute;opacity:0;pointer-events:none}
+    .mode-option span{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;min-height:66px;border:1px solid #414348;background:#111316;color:#e6e5df;border-radius:11px;transition:border-color .18s,background .18s,color .18s}
+    .mode-option b{font-size:13px;font-weight:950;letter-spacing:.06em}
+    .mode-option small{font-size:10px;font-weight:700;color:#a1a19e;letter-spacing:.04em}
+    .mode-option input:checked+span{border-color:var(--yellow);background:#fbe05216;color:var(--yellow)}
+    .mode-option input:checked+span small{color:#e2d894}
+    .mode-option input:focus-visible+span{outline:2px solid white;outline-offset:3px}
+    .mode-option input:disabled+span{opacity:.6;cursor:not-allowed}
     .middle{margin-top:28px}
     .quality-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
     .quality-option{position:relative;display:block;cursor:pointer}
@@ -123,10 +133,16 @@
         </div>
         <div class="workspace-body">
           <form id="form">
-            <div class="field-head"><label for="url"><span class="num">01 /</span> PASTE PLAYLIST LINK</label><span class="field-help">YouTube or YouTube Music</span></div>
-            <div class="urlrow"><input id="url" type="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://youtube.com/playlist?list=..." aria-describedby="urlhelp"><button type="button" class="paste" id="paste">PASTE</button></div>
+            <div class="field-head"><span class="mode-heading"><span class="num">01 /</span> CONVERSION MODE</span><span class="field-help">Choose what to download</span></div>
+            <div class="mode-grid" role="radiogroup" aria-label="Conversion mode">
+              <label class="mode-option"><input type="radio" name="mode" value="playlist" checked><span><b>PLAYLIST</b><small>MP3 ZIP ARCHIVE</small></span></label>
+              <label class="mode-option"><input type="radio" name="mode" value="single"><span><b>SINGLE VIDEO</b><small>ONE MP3 FILE</small></span></label>
+            </div>
+            <div class="field-head"><label for="url"><span class="num">02 /</span> <span id="linklabel">PASTE PLAYLIST LINK</span></label><span class="field-help">YouTube or YouTube Music</span></div>
+            <div class="urlrow"><input id="url" type="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://youtube.com/playlist?list=..." aria-describedby="modehint"><button type="button" class="paste" id="paste">PASTE</button></div>
+            <p class="note" id="modehint">Download multiple videos as one MP3 ZIP archive.</p>
             <div class="middle">
-              <div class="field-head"><label><span class="num">02 /</span> CHOOSE AUDIO QUALITY</label><span class="field-help">MP3 bitrate</span></div>
+              <div class="field-head"><label><span class="num">03 /</span> CHOOSE AUDIO QUALITY</label><span class="field-help">MP3 bitrate</span></div>
               <div class="quality-grid" role="group" aria-label="MP3 bitrate">
                 <label class="quality-option"><input type="radio" name="quality" value="128"><span><b>128</b><small>KBPS</small></span></label>
                 <label class="quality-option"><input type="radio" name="quality" value="192" checked><span><b>192</b><small>KBPS</small></span></label>
@@ -142,7 +158,7 @@
             <p id="current">Connecting to converter…</p>
             <div class="meter" id="progress" role="progressbar" aria-label="Conversion progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="fill"></div></div>
             <div class="resultfoot"><span id="percent">0%</span><button type="button" class="cancel" id="cancel">CANCEL JOB</button></div>
-            <a id="download" class="download" href="#" hidden><span>↓ DOWNLOAD YOUR MP3 ZIP</span><span aria-hidden="true">↗</span></a>
+            <a id="download" class="download" href="#" hidden><span id="download-text">↓ DOWNLOAD YOUR MP3 ZIP</span><span aria-hidden="true">↗</span></a>
             <details id="skipped" hidden><summary id="skiptitle">Skipped tracks</summary><ul id="skiplist"></ul></details>
           </div>
           <div class="error" id="error" role="alert" hidden></div>
@@ -172,14 +188,24 @@
       const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\/+$/, "");
       const NEEDS_API = !LOCAL && !API_ROOT;
       const apiUrl = path => API_ROOT + path;
-      let jobId = null, pollTimer = null, busy = false, retries = 0;
+      let jobId = null, pollTimer = null, busy = false, retries = 0, jobMode = "playlist";
+      const modeRadios = Array.from(document.querySelectorAll('input[name="mode"]'));
+      const selectedMode = () => document.querySelector('input[name="mode"]:checked')?.value || "playlist";
+      const updateModeUI = () => {
+        const one = selectedMode() === "single";
+        el("linklabel").textContent = one ? "PASTE VIDEO LINK" : "PASTE PLAYLIST LINK";
+        el("url").placeholder = one ? "https://youtube.com/watch?v=..." : "https://youtube.com/playlist?list=...";
+        el("modehint").textContent = one ? "Download one video directly as an MP3 file." : "Download multiple videos as one MP3 ZIP archive.";
+        if (!busy) el("gotext").textContent = one ? "DOWNLOAD MY MP3" : "BUILD MY MP3 ZIP";
+      };
+      modeRadios.forEach(input => input.addEventListener("change", () => { updateModeUI(); clearError(); }));
       const safeStore = (value) => { try { if(value) sessionStorage.setItem(JOB_KEY,value); else sessionStorage.removeItem(JOB_KEY); } catch {} };
       const savedJob = () => { try { return sessionStorage.getItem(JOB_KEY); } catch { return null; } };
       const error = message => { el("error").textContent = message; el("error").hidden = false; };
       const clearError = () => { el("error").hidden = true; el("error").textContent = ""; };
       const meter = value => { const n = Math.max(0,Math.min(100,Math.round(value))); el("fill").style.width = n + "%"; el("percent").textContent = n + "%"; el("progress").setAttribute("aria-valuenow",String(n)); };
-      const end = () => { busy=false; el("go").disabled=false; el("gotext").textContent="BUILD MY MP3 ZIP"; el("cancel").hidden=true; };
-      const startUI = () => { busy=true; el("go").disabled=true; el("gotext").textContent="CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
+      const end = () => { busy=false; el("go").disabled=false; modeRadios.forEach(input => input.disabled=false); updateModeUI(); el("cancel").hidden=true; };
+      const startUI = () => { jobMode=selectedMode(); busy=true; modeRadios.forEach(input => input.disabled=true); el("go").disabled=true; el("gotext").textContent=jobMode==="single"?"CONVERTING VIDEO…":"CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
       async function api(path, options) { const r=await fetch(apiUrl(path),{cache:"no-store",...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.error||("Server returned "+r.status)); return data; }
       function skipped(items) { const list=el("skiplist"); list.replaceChildren(); if(!items||!items.length){el("skipped").hidden=true;return;} for(const message of items){const li=document.createElement("li");li.textContent=message;list.append(li);} el("skiptitle").textContent=items.length+" skipped track(s)"; el("skipped").hidden=false; }
       function next() { clearTimeout(pollTimer); pollTimer=setTimeout(poll,1300); }
@@ -188,14 +214,20 @@
         try {
           const s=await api("/api/jobs/"+encodeURIComponent(jobId));
           retries=0;
-          el("count").textContent=s.total?(s.done+" / "+s.total+" TRACKS"):"SCANNING";
+          if(s.mode==="single"||s.mode==="playlist") {
+            jobMode=s.mode;
+            const radio=modeRadios.find(input=>input.value===jobMode);
+            if(radio && !radio.checked){radio.checked=true;updateModeUI();}
+          }
+          el("count").textContent=s.total?(s.done+" / "+s.total+(jobMode==="single"?" VIDEO":" TRACKS")):"SCANNING";
           el("current").textContent=s.current||"";
           skipped(s.failed);
-          if(s.status==="queued"||s.status==="reading") { el("stage").textContent="Reading playlist"; el("current").textContent="Finding available tracks…"; meter(2); }
-          else if(s.status==="downloading") { el("stage").textContent="Converting MP3 files"; meter(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3); }
+          if(s.status==="queued"||s.status==="reading") { el("stage").textContent=jobMode==="single"?"Reading video":"Reading playlist"; el("current").textContent=jobMode==="single"?"Checking video details…":"Finding available tracks…"; meter(2); }
+          else if(s.status==="downloading") { el("stage").textContent=jobMode==="single"?"Converting video to MP3":"Converting MP3 files"; meter(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3); }
           else if(s.status==="zipping") { el("stage").textContent="Packaging your ZIP"; meter(97); }
           else if(s.status==="complete") {
-            el("stage").textContent="Your ZIP is ready";
+            el("stage").textContent=jobMode==="single"?"Your MP3 is ready":"Your ZIP is ready";
+            el("download-text").textContent=jobMode==="single"?"↓ DOWNLOAD YOUR MP3":"↓ DOWNLOAD YOUR MP3 ZIP";
             el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.title?" · "+s.title:"");
             meter(100);
             el("download").href=apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/download");
@@ -220,7 +252,7 @@
         clearTimeout(pollTimer);jobId=null;retries=0;startUI();
         const checked=document.querySelector('input[name="quality"]:checked');
         try{
-          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:el("url").value.trim(),quality:checked?checked.value:"192"})});
+          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:jobMode,url:el("url").value.trim(),quality:checked?checked.value:"192"})});
           jobId=job.id;safeStore(jobId);await poll();
         }catch(e){error(e.message);el("system").textContent="READY TO RUN";end();}
       });
@@ -236,6 +268,7 @@
         el("go").disabled=true;
         el("gotext").textContent="CONNECT CONVERTER FIRST";
       }
+      updateModeUI();
       const prior=NEEDS_API?null:savedJob();
       if(prior&&/^[a-f0-9]{32}$/.test(prior)){jobId=prior;startUI();poll();}
       if(!NEEDS_API) fetch(apiUrl("/api/health"),{cache:"no-store"}).then(r=>r.json()).then(info=>{
