@@ -99,7 +99,11 @@ PLIST="dist/YUBSUB.app/Contents/Info.plist"
 
 # The bundle version must increase monotonically for Sparkle comparisons.
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
-/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$PLIST"
+if /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$PLIST" >/dev/null 2>&1; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$PLIST"
+else
+  /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $APP_BUILD" "$PLIST"
+fi
 
 # The public Ed25519 key is intentionally supplied from a GitHub Actions
 # repository variable. The corresponding private key must NEVER be bundled.
