@@ -91,7 +91,7 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag="mac-app-v0.2.0"
+          tag="mac-app-v0.3.0"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release $tag already exists; no changes made."
             exit 0
@@ -101,6 +101,6 @@ jobs:
             release/YUBSUB-macOS-Apple-Silicon.zip \
             release/SHA256SUMS.txt \
             --target "$GITHUB_SHA" \
-            --title "YUBSUB Desktop v0.2.0 — macOS" \
+            --title "YUBSUB Desktop v0.3.0 — macOS" \
             --latest \
             --notes-file mac-app/RELEASE_NOTES.md

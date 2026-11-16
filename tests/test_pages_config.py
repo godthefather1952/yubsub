@@ -23,3 +23,13 @@ def test_pages_workflow_uses_existing_render_backend():
     assert "https://yubsub.onrender.com" in workflow
     assert "actions/deploy-pages" in workflow
     assert "API_BASE_URL" in workflow
+
+
+def test_playlist_mode_is_default_on_both_frontends():
+    root = (ROOT / "index.html").read_text()
+    local = (ROOT / "static" / "index.html").read_text()
+    assert root == local  # GitHub Pages and the Mac app display the same UI
+    assert 'name="mode" value="playlist" checked' in root
+    assert 'name="mode" value="single"' in root
+    assert "mode:jobMode" in root
+    assert 'jobMode==="single"?"↓ DOWNLOAD YOUR MP3":"↓ DOWNLOAD YOUR MP3 ZIP"' in root

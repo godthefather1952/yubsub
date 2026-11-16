@@ -130,3 +130,100 @@ def test_player_response_fallback_and_stop(monkeypatch):
         assert len(attempts) == 4  # original + alternate client for two tracks
         assert attempts[1] == {"youtube": {"player_client": ["web", "mweb", "tv"]}}
         assert "YouTube is not providing playable video data" in job["error"]
+
+
+def test_single_video_links_and_host_validation():
+    canonical = "https://www.youtube.com/watch?v=abcdefghijk"
+    assert mod.video_url(canonical) == canonical
+    assert mod.video_url("https://youtu.be/abcdefghijk?t=3") == canonical
+    assert mod.video_url("https://www.youtube.com/shorts/abcdefghijk") == canonical
+    assert mod.video_url("https://youtube.com/live/abcdefghijk") == canonical
+    assert mod.video_url("https://music.youtube.com/watch?v=abcdefghijk&list=PL1234567890123") == canonical
+    for url in (
+        "http://youtube.com/watch?v=abcdefghijk",
+        "https://youtube.com:8888/watch?v=abcdefghijk",
+        "https://evil.test/watch?v=abcdefghijk",
+        "https://youtube.com.evil.test/watch?v=abcdefghijk",
+        "https://youtube.com/playlist?list=PL1234567890123",
+        "https://youtube.com/watch?v=short",
+        "https://youtu.be/abcdefghijkx",
+        "https://username:password@youtube.com/watch?v=abcdefghijk",
+    ):
+        assert mod.video_url(url) is None
+
+
+def test_job_api_validates_mode_and_keeps_playlist_default(monkeypatch):
+    class NoRunThread:
+        def __init__(self, *args, **kwargs): pass
+        def start(self): pass
+
+    monkeypatch.setattr(mod.threading, "Thread", NoRunThread)
+    monkeypatch.setattr(mod, "MAX_ACTIVE", 99)
+    client = mod.app.test_client()
+    assert client.post("/api/jobs", json={"url": "https://youtu.be/abcdefghijk", "mode": "other"}).status_code == 400
+    assert client.post("/api/jobs", json={"url": "https://evil.test/watch?v=abcdefghijk", "mode": "single"}).status_code == 400
+    assert client.post("/api/jobs", json={"url": "https://youtu.be/abcdefghijk", "mode": "playlist"}).status_code == 400
+
+    created = []
+    try:
+        for payload, expected in (
+            ({"url": "https://youtu.be/abcdefghijk", "mode": "single"}, "single"),
+            ({"url": "https://youtube.com/playlist?list=PL1234567890123"}, "playlist"),
+        ):
+            response = client.post("/api/jobs", json=payload)
+            assert response.status_code == 202, response.json
+            job_id = response.json["id"]
+            created.append(job_id)
+            status = client.get("/api/jobs/" + job_id)
+            assert status.json["mode"] == expected
+            assert mod.JOBS[job_id]["mode"] == expected
+    finally:
+        with mod.LOCK:
+            for job_id in created:
+                job = mod.JOBS.pop(job_id, None)
+                if job:
+                    import shutil
+                    shutil.rmtree(job["directory"], ignore_errors=True)
+
+
+def test_single_video_converts_to_direct_mp3(monkeypatch):
+    class FakeYDL:
+        def __init__(self, opts): self.opts = opts
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def extract_info(self, *args, **kwargs):
+            assert self.opts["noplaylist"] is True
+            return {"id": "abcdefghijk", "title": "Sample Video"}
+        def download(self, urls):
+            assert urls == ["https://www.youtube.com/watch?v=abcdefghijk"]
+            output = self.opts["outtmpl"].replace("%%", "%").replace("%(ext)s", "mp3")
+            Path(output).write_bytes(b"ID3 fake mp3")
+            return 0
+
+    monkeypatch.setattr(mod.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(mod.yt_dlp, "YoutubeDL", FakeYDL)
+    with tempfile.TemporaryDirectory() as directory:
+        folder = Path(directory, "single")
+        folder.mkdir()
+        job = dict(id="single-test", mode="single",
+                   url="https://www.youtube.com/watch?v=abcdefghijk",
+                   directory=str(folder), stop=threading.Event(),
+                   quality="192", status="queued", title="", current="",
+                   total=0, done=0, succeeded=0, track_percent=0, failed=[],
+                   error=None, archive=None, finished=None)
+        mod.run_job(job)
+        assert job["status"] == "complete", job["error"]
+        assert job["succeeded"] == job["total"] == 1
+        assert Path(job["archive"]).name == "Sample Video.mp3"
+        assert not list(folder.glob("*.zip"))
+        with mod.LOCK:
+            mod.JOBS[job["id"]] = job
+        try:
+            response = mod.app.test_client().get("/api/jobs/single-test/download")
+            assert response.status_code == 200
+            assert response.data == b"ID3 fake mp3"
+            assert response.mimetype == "audio/mpeg"
+            assert "Sample Video.mp3" in response.headers["Content-Disposition"]
+        finally:
+            with mod.LOCK:
+                mod.JOBS.pop(job["id"], None)
