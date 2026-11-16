@@ -23,7 +23,7 @@ esac
 
 mkdir -p build/bin build/licenses
 APP_VERSION="$(tr -d '[:space:]' < mac-app/VERSION)"
-[[ "$APP_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]] || { echo "Invalid mac-app/VERSION" >&2; exit 1; }
+[[ "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid mac-app/VERSION" >&2; exit 1; }
 APP_BUILD="$(python3 - "$APP_VERSION" <<'PY'
 import sys
 major,minor,patch = map(int, sys.argv[1].split('.'))
@@ -117,7 +117,7 @@ PY
   curl -fL --retry 3 \
     "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
     -o "build/Sparkle-${SPARKLE_VERSION}.tar.xz"
-  printf '%s  %s\\n' "$SPARKLE_SHA" "build/Sparkle-${SPARKLE_VERSION}.tar.xz" | shasum -a 256 -c -
+  printf '%s  %s\n' "$SPARKLE_SHA" "build/Sparkle-${SPARKLE_VERSION}.tar.xz" | shasum -a 256 -c -
   mkdir -p build/sparkle
   tar -xf "build/Sparkle-${SPARKLE_VERSION}.tar.xz" -C build/sparkle
   test -d build/sparkle/Sparkle.framework || { echo "Sparkle.framework missing from upstream archive" >&2; exit 1; }
