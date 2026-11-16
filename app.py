@@ -63,6 +63,29 @@ def playlist_url(raw):
         return None
 
 
+def video_url(raw):
+    """Accept a single YouTube video link and return a canonical watch URL."""
+    try:
+        u = urlsplit(raw.strip())
+        if u.scheme != "https" or u.username or u.password or u.port not in (None, 443):
+            return None
+        if u.hostname not in ("youtube.com", "www.youtube.com", "m.youtube.com",
+                              "music.youtube.com", "youtu.be", "www.youtu.be"):
+            return None
+        if u.hostname in ("youtu.be", "www.youtu.be"):
+            match = re.fullmatch(r"/([A-Za-z0-9_-]{11})/?", u.path)
+            video_id = match.group(1) if match else ""
+        elif u.path == "/watch":
+            video_id = (parse_qs(u.query).get("v") or [""])[0]
+        else:
+            match = re.fullmatch(r"/(?:shorts|live|embed)/([A-Za-z0-9_-]{11})/?", u.path)
+            video_id = match.group(1) if match else ""
+        return ("https://www.youtube.com/watch?v=" + video_id
+                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id) else None)
+    except (ValueError, AttributeError):
+        return None
+
+
 def safe_name(value, fallback="playlist"):
     value = re.sub(r'[\x00-\x1f\\/:*?"<>|]', "_", str(value or ""))
     value = re.sub(r"\s+", " ", value).strip(" .")
@@ -157,17 +180,31 @@ def run_job(job):
             raise RuntimeError("FFmpeg is not installed.")
         if not (shutil.which("deno") or shutil.which("node")):
             raise RuntimeError("Deno 2.3+ (or Node 22+) is required for YouTube.")
+        mode = job.get("mode", "playlist")
         update(job, status="reading")
-        with yt_dlp.YoutubeDL(yt_options(extract_flat="in_playlist", skip_download=True,
-                                         ignoreerrors=True, playlistend=MAX_TRACKS)) as ydl:
-            info = ydl.extract_info(job["url"], download=False)
-        check_cancel(job)
-        if not info or not info.get("entries"):
-            raise RuntimeError("Playlist is empty, private or unavailable.")
-        entries = list(itertools.islice((e for e in info["entries"] if e), MAX_TRACKS))
-        if not entries:
-            raise RuntimeError("No accessible tracks found.")
-        title = safe_name(info.get("title"), "YouTube playlist")
+        if mode == "single":
+            with yt_dlp.YoutubeDL(yt_options(skip_download=True, noplaylist=True,
+                                             ignoreerrors=False)) as ydl:
+                info = ydl.extract_info(job["url"], download=False)
+            check_cancel(job)
+            if not info or info.get("entries"):
+                raise RuntimeError("Video is private or unavailable.")
+            video_id = str(info.get("id") or "")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                raise RuntimeError("Video is unavailable or has no valid ID.")
+            title = safe_name(info.get("title"), "YouTube video")
+            entries = [{"id": video_id, "title": title}]
+        else:
+            with yt_dlp.YoutubeDL(yt_options(extract_flat="in_playlist", skip_download=True,
+                                             ignoreerrors=True, playlistend=MAX_TRACKS)) as ydl:
+                info = ydl.extract_info(job["url"], download=False)
+            check_cancel(job)
+            if not info or not info.get("entries"):
+                raise RuntimeError("Playlist is empty, private or unavailable.")
+            entries = list(itertools.islice((e for e in info["entries"] if e), MAX_TRACKS))
+            if not entries:
+                raise RuntimeError("No accessible tracks found.")
+            title = safe_name(info.get("title"), "YouTube playlist")
         update(job, status="downloading", title=title, total=len(entries))
         ready = []
         total_bytes = 0
@@ -175,7 +212,7 @@ def run_job(job):
         for index, item in enumerate(entries, 1):
             check_cancel(job)
             track = safe_name(item.get("title"), "Track " + str(index))
-            label = "{:03d} - {}".format(index, track)
+            label = track if mode == "single" else "{:03d} - {}".format(index, track)
             update(job, done=index - 1, current=track, track_percent=0)
             video_id = str(item.get("id") or "")
             if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
@@ -251,6 +288,11 @@ def run_job(job):
         if not ready:
             first = job["failed"][0] if job["failed"] else "Unknown"
             raise RuntimeError("No tracks could be converted. " + first)
+        if mode == "single":
+            # Direct MP3: one downloadable file, no ZIP or numbering.
+            update(job, status="complete", archive=str(ready[0]), finished=time.time(),
+                   current="", track_percent=100)
+            return
         update(job, status="zipping", current="Packaging MP3 files")
         zip_path = folder / (title + ".zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as bundle:
@@ -304,10 +346,16 @@ def health():
 def start():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify(error="Submit a YouTube playlist URL."), 400
-    url = playlist_url(str(data.get("url", "")))
+        return jsonify(error="Submit a YouTube URL."), 400
+    mode = data.get("mode", "playlist")
+    if mode not in ("playlist", "single"):
+        return jsonify(error="Choose playlist or single video mode."), 400
+    url = (video_url if mode == "single" else playlist_url)(str(data.get("url", "")))
     if not url:
-        return jsonify(error="Enter a YouTube playlist link containing list=."), 400
+        message = ("Enter a single YouTube video link."
+                   if mode == "single"
+                   else "Enter a YouTube playlist link containing list=.")
+        return jsonify(error=message), 400
     quality = str(data.get("quality", "192"))
     if quality not in {"128", "192", "256", "320"}:
         return jsonify(error="Invalid MP3 bitrate."), 400
@@ -315,7 +363,7 @@ def start():
         if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
             return jsonify(error="Converter is busy. Try again shortly."), 429
         jid = uuid.uuid4().hex
-        job = dict(id=jid, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
+        job = dict(id=jid, mode=mode, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
                    stop=threading.Event(), status="queued", title="", current="",
                    total=0, done=0, succeeded=0, track_percent=0, failed=[],
                    error=None, archive=None, finished=None)
@@ -330,7 +378,7 @@ def status(jid):
         job = JOBS.get(jid)
         if not job:
             return jsonify(error="Job not found or expired."), 404
-        fields = ("id", "status", "title", "current", "total", "done", "succeeded",
+        fields = ("id", "mode", "status", "title", "current", "total", "done", "succeeded",
                   "track_percent", "failed", "error")
         return jsonify({key: job[key] for key in fields})
 
@@ -352,12 +400,14 @@ def download(jid):
     with LOCK:
         job = JOBS.get(jid)
         if not job or job["status"] != "complete":
-            return jsonify(error="ZIP is not ready or has expired."), 404
-        path, title = job["archive"], job["title"]
+            return jsonify(error="Download is not ready or has expired."), 404
+        path, title, mode = job["archive"], job["title"], job.get("mode", "playlist")
     if not Path(path).is_file():
-        return jsonify(error="ZIP expired."), 410
-    return send_file(path, as_attachment=True, download_name=safe_name(title) + ".zip",
-                     mimetype="application/zip", max_age=0)
+        return jsonify(error="Download expired."), 410
+    extension = ".mp3" if mode == "single" else ".zip"
+    mimetype = "audio/mpeg" if mode == "single" else "application/zip"
+    return send_file(path, as_attachment=True, download_name=safe_name(title) + extension,
+                     mimetype=mimetype, max_age=0)
 
 
 if __name__ == "__main__":
