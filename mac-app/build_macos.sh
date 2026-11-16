@@ -22,7 +22,16 @@ case "$ARCH" in
 esac
 
 mkdir -p build/bin build/licenses
-echo "Building YUBSUB.app for $ARCH"
+APP_VERSION="$(tr -d '[:space:]' < mac-app/VERSION)"
+[[ "$APP_VERSION" =~ ^[0-9]+\\.[0-9]+\\.[0-9]+$ ]] || { echo "Invalid mac-app/VERSION" >&2; exit 1; }
+APP_BUILD="$(python3 - "$APP_VERSION" <<'PY'
+import sys
+major,minor,patch = map(int, sys.argv[1].split('.'))
+assert minor < 100 and patch < 100, 'minor/patch must be below 100'
+print(major * 10000 + minor * 100 + patch)
+PY
+)"
+echo "Building YUBSUB.app v$APP_VERSION (build $APP_BUILD) for $ARCH"
 
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
@@ -76,6 +85,8 @@ python -m PyInstaller --clean --noconfirm \
   --collect-all yt_dlp_ejs \
   --collect-all webview \
   --hidden-import webview.platforms.cocoa \
+  --hidden-import sparkle_updater \
+  --paths mac-app \
   mac_app.py
 
 test -d dist/YUBSUB.app
@@ -85,6 +96,49 @@ test -x dist/YUBSUB.app/Contents/MacOS/YUBSUB
 PLIST="dist/YUBSUB.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PLIST"
 /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$PLIST"
+
+# The bundle version must increase monotonically for Sparkle comparisons.
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$PLIST"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $APP_BUILD" "$PLIST"
+
+# The public Ed25519 key is intentionally supplied from a GitHub Actions
+# repository variable. The corresponding private key must NEVER be bundled.
+# In PRs with no key, build a usable app without updater support; publishing an
+# official auto-updating release is blocked separately by the release workflow.
+SPARKLE_PUBLIC_ED_KEY="${SPARKLE_PUBLIC_ED_KEY:-}"
+if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+  SPARKLE_PUB="$SPARKLE_PUBLIC_ED_KEY" python - <<'PY'
+import base64, os
+key = base64.b64decode(os.environ["SPARKLE_PUB"], validate=True)
+assert len(key) == 32, "SPARKLE_PUBLIC_ED_KEY must be a 32-byte Ed25519 public key (base64)"
+PY
+  SPARKLE_VERSION="2.10.1"
+  SPARKLE_SHA="1a856d2a9edb8e628de88121d7be04cf0e2167f8641650b78fca00b14244cf27"
+  curl -fL --retry 3 \
+    "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+    -o "build/Sparkle-${SPARKLE_VERSION}.tar.xz"
+  printf '%s  %s\\n' "$SPARKLE_SHA" "build/Sparkle-${SPARKLE_VERSION}.tar.xz" | shasum -a 256 -c -
+  mkdir -p build/sparkle
+  tar -xf "build/Sparkle-${SPARKLE_VERSION}.tar.xz" -C build/sparkle
+  test -d build/sparkle/Sparkle.framework || { echo "Sparkle.framework missing from upstream archive" >&2; exit 1; }
+  mkdir -p dist/YUBSUB.app/Contents/Frameworks
+  ditto build/sparkle/Sparkle.framework dist/YUBSUB.app/Contents/Frameworks/Sparkle.framework
+
+  case "$ARCH" in
+    x86_64) FEED="appcast-Intel.xml" ;;
+    arm64) FEED="appcast-Apple-Silicon.xml" ;;
+  esac
+  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_ED_KEY" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string https://github.com/godthefather1952/yubsub/releases/latest/download/$FEED" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUEnableAutomaticChecks bool true" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUScheduledCheckInterval integer 86400" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUAutomaticallyUpdate bool false" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUAllowsAutomaticUpdates bool false" "$PLIST"
+  /usr/libexec/PlistBuddy -c "Add :SUVerifyUpdateBeforeExtraction bool true" "$PLIST"
+  echo "Secure updater enabled: Ed25519 signature required before extraction."
+else
+  echo "Secure updater not configured; application can run but cannot self-update."
+fi
 
 # An ad-hoc signature supports Apple Silicon; it is NOT a Developer ID signature
 # and does NOT bypass the macOS downloaded-app warning.
