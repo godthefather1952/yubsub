@@ -1,8 +1,8 @@
-# YUBSUB Desktop v0.2.0 — standalone macOS application
+# YUBSUB Desktop v0.3.0 — standalone macOS application
 
 **No Terminal, Homebrew, Python or pip required.** The YUBSUB application contains its own Python runtime and libraries, yt-dlp + the matching EJS scripts, Deno, FFmpeg and FFprobe.
 
-## Download
+## What's new in v0.3.0\n\n- **Playlist / Single Video switch** directly above the link field. **Playlist is selected by default.**\n- Playlist mode continues downloading numbered MP3s inside a ZIP file.\n- Single Video mode accepts individual YouTube URLs and downloads the converted audio as a **single .mp3 file, no ZIP**.\n- Mode-aware link examples, status text, action button and download button.\n- Secure URL allowlist on both modes; no arbitrary website downloads.\n\n## Download
 - **Intel Macs:** `YUBSUB-macOS-Intel.zip`
 - **Apple Silicon (M1/M2/M3/M4/M5):** `YUBSUB-macOS-Apple-Silicon.zip`
 
