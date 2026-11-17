@@ -1,4 +1,4 @@
-# YUBSUB Desktop v0.3.0 — standalone macOS application
+# YUBSUB Desktop v0.4.0 — standalone macOS application
 
 **No Terminal, Homebrew, Python or pip required.** The YUBSUB application contains its own Python runtime and libraries, yt-dlp + the matching EJS scripts, Deno, FFmpeg and FFprobe.
 
@@ -15,7 +15,7 @@ The app listens only on a randomly selected `127.0.0.1` port. It never exposes a
 - **Unsigned/unnotarized:** Apple's Gatekeeper may block the app initially. Use Finder's Open command and macOS Privacy & Security controls if you trust the release. There is no supported way to eliminate the warning for all users without Apple Developer ID signing and notarization. Do **not** disable Gatekeeper globally.
 - **macOS compatibility:** Built on GitHub-hosted macOS 15 runners for both CPU architectures. Older systems (including macOS 12) require actual device testing and may not run all packaged components.
 - **YouTube:** Availability may change. Use YUBSUB only for content you own or have permission to download.
-- **No automatic updates:** A later release must be installed manually.
+- **Update signing is mandatory:** Official v0.4.0 release publication is blocked until the owner configures matching GitHub Actions private/public Ed25519 keys. See [owner setup](mac-app/UPDATING.md).
 - **No public cloud hosting:** The standalone app works only when the Mac is powered on and YUBSUB is open.
 
 ## Third-party binary licenses
