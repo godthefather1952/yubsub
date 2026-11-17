@@ -144,9 +144,19 @@ else
   echo "Secure updater not configured; application can run but cannot self-update."
 fi
 
-# An ad-hoc signature supports Apple Silicon; it is NOT a Developer ID signature
-# and does NOT bypass the macOS downloaded-app warning.
-codesign --force --deep --sign - dist/YUBSUB.app
+# Sign nested Sparkle helpers inside out. A blanket --deep signing operation
+# can remove the Downloader XPC's required entitlements (Sparkle documentation).
+# An ad-hoc signature supports Apple Silicon but does NOT replace Developer ID.
+if [[ -n "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+  FW="dist/YUBSUB.app/Contents/Frameworks/Sparkle.framework"
+  FV="$FW/Versions/Current"
+  codesign --force --sign - "$FV/XPCServices/Installer.xpc"
+  codesign --force --sign - --preserve-metadata=entitlements "$FV/XPCServices/Downloader.xpc"
+  codesign --force --sign - "$FV/Autoupdate"
+  codesign --force --sign - "$FV/Updater.app"
+  codesign --force --sign - "$FW"
+fi
+codesign --force --sign - dist/YUBSUB.app
 codesign --verify --deep --strict dist/YUBSUB.app
 
 echo 'Running frozen executable smoke test...'
