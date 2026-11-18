@@ -1,24 +1,35 @@
-# YUBSUB Desktop v0.4.0 — standalone macOS application
+# YUBSUB Desktop v0.4.1 — Native macOS MP3 Save As fix
 
-**No Terminal, Homebrew, Python or pip required.** The YUBSUB application contains its own Python runtime and libraries, yt-dlp + the matching EJS scripts, Deno, FFmpeg and FFprobe.
+## Fixed in v0.4.1
 
-## What's new in v0.3.0\n\n- **Playlist / Single Video switch** directly above the link field. **Playlist is selected by default.**\n- Playlist mode continues downloading numbered MP3s inside a ZIP file.\n- Single Video mode accepts individual YouTube URLs and downloads the converted audio as a **single .mp3 file, no ZIP**.\n- Mode-aware link examples, status text, action button and download button.\n- Secure URL allowlist on both modes; no arbitrary website downloads.\n\n## Download
+**Single Video → Download Your MP3** now opens a native macOS **Save As** dialog. Choose the destination folder and filename; the completed MP3 is written directly to disk instead of opening as playable audio inside the app.
+
+- Native Save dialog for individual MP3 downloads on macOS.
+- Keep the converted MP3 available to save again without re-converting.
+- Safe, atomic writing to the selected location; cancelling the dialog leaves the source untouched.
+- **Playlist mode** still downloads numbered MP3 files as a ZIP, unchanged.
+- GitHub Pages/browser visitors continue using the standard HTTP attachment endpoint.
+- Includes Sparkle automatic update support from v0.4.0; Intel and Apple silicon release packages are Ed25519-signed for update verification.
+
+## Download
+
 - **Intel Macs:** `YUBSUB-macOS-Intel.zip`
-- **Apple Silicon (M1/M2/M3/M4/M5):** `YUBSUB-macOS-Apple-Silicon.zip`
+- **Apple silicon Macs:** `YUBSUB-macOS-Apple-Silicon.zip`
 
-Unzip the appropriate archive, drag **YUBSUB.app** into the **Applications** folder and launch it from Finder. YUBSUB opens as a native Mac window, including Save dialogs for your MP3 ZIP downloads. Quit the window to stop its temporary local server.
+If you already have v0.4.0 installed, click **Check for Updates** to try the new secure updater. If the update prompt does not work, install v0.4.1 manually by replacing YUBSUB.app in Applications.
 
-The app listens only on a randomly selected `127.0.0.1` port. It never exposes an internet-facing API. Max 200 tracks and 1.2 GB of ZIP output per conversion. All media downloads are processed on your Mac.
+## How YUBSUB works
 
-## Compatibility and limitations
+YUBSUB is a standalone local macOS application. Python, yt-dlp, Deno, FFmpeg and FFprobe are bundled. It offers **Playlist mode** (default, ZIP of numbered MP3s) and **Single Video mode** (one MP3), selectable audio quality and conversion progress. No Terminal, Homebrew, pip or subscriptions required.
 
-- **Unsigned/unnotarized:** Apple's Gatekeeper may block the app initially. Use Finder's Open command and macOS Privacy & Security controls if you trust the release. There is no supported way to eliminate the warning for all users without Apple Developer ID signing and notarization. Do **not** disable Gatekeeper globally.
-- **macOS compatibility:** Built on GitHub-hosted macOS 15 runners for both CPU architectures. Older systems (including macOS 12) require actual device testing and may not run all packaged components.
-- **YouTube:** Availability may change. Use YUBSUB only for content you own or have permission to download.
-- **Update signing is mandatory:** Official v0.4.0 release publication is blocked until the owner configures matching GitHub Actions private/public Ed25519 keys. See [owner setup](mac-app/UPDATING.md).
-- **No public cloud hosting:** The standalone app works only when the Mac is powered on and YUBSUB is open.
+## Compatibility and important limitations
 
-## Third-party binary licenses
-YUBSUB bundles FFmpeg / FFprobe static distributions from [eugeneware/ffmpeg-static b6.1.1](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1), including the corresponding license/README in the app bundle. The upstream FFmpeg source is available at [ffmpeg.org/download](https://ffmpeg.org/download.html). Deno is downloaded from [denoland/deno v2.9.7](https://github.com/denoland/deno/releases/tag/v2.9.7). The build verifies these downloads before packaging.
+- **Apple Gatekeeper:** This software is not Developer ID signed/notarized. macOS may ask you to approve it at first launch. Update archives are separately Ed25519-signed for Sparkle; that does not replace Apple's Gatekeeper checks.
+- **Older Macs:** Built on macOS 15 GitHub runners; test older macOS versions on an actual device.
+- **Update installation:** A real device upgrade from v0.4.0 to v0.4.1 still needs to be verified.
+- **Rights:** Download only content you own or have permission to use.
+- **Local:** The Mac must be running YUBSUB to process downloads.
 
-The build process is in [mac-app/build_macos.sh](https://github.com/godthefather1952/yubsub/blob/main/mac-app/build_macos.sh).
+## Third-party components
+
+The included FFmpeg/FFprobe static distributions use [eugeneware/ffmpeg-static b6.1.1](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1) with their license and README bundled in the app. [Deno v2.9.7](https://github.com/denoland/deno/releases/tag/v2.9.7) and [Sparkle v2.10.1](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.1) are included in the build. Review these projects' licenses before commercial distribution.
