@@ -139,8 +139,8 @@
           <form id="form">
             <div class="field-head"><span class="mode-heading"><span class="num">01 /</span> CONVERSION MODE</span><span class="field-help">Choose what to download</span></div>
             <div class="mode-grid" role="radiogroup" aria-label="Conversion mode">
-              <label class="mode-option"><input type="radio" name="mode" value="playlist" checked><span><b>PLAYLIST</b><small>MP3 ZIP ARCHIVE</small></span></label>
-              <label class="mode-option"><input type="radio" name="mode" value="single"><span><b>SINGLE VIDEO</b><small>ONE MP3 FILE</small></span></label>
+              <label class="mode-option"><input type="radio" name="mode" value="playlist" checked><span><b>PLAYLIST</b><small id="playlist-format-hint">MP3 ZIP ARCHIVE</small></span></label>
+              <label class="mode-option"><input type="radio" name="mode" value="single"><span><b>SINGLE VIDEO</b><small id="single-format-hint">ONE MP3 FILE</small></span></label>
             </div>
             <div class="field-head"><label for="url"><span class="num">02 /</span> <span id="linklabel">PASTE PLAYLIST LINK</span></label><span class="field-help">YouTube or YouTube Music</span></div>
             <div class="urlrow"><input id="url" type="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://youtube.com/playlist?list=..." aria-describedby="modehint"><button type="button" class="paste" id="paste">PASTE</button></div>
@@ -181,7 +181,7 @@
   </div>
   <section class="strip" id="how" aria-label="How YUBSUB works">
     <div class="container stripinner">
-      <div class="step"><div class="stepnumber">STEP 01 / COPY</div><div class="steptitle">Grab the playlist URL.</div><p class="steptext">Open a public YouTube playlist or YouTube Music playlist and copy its link.</p></div>
+      <div class="step"><div class="stepnumber">STEP 01 / COPY</div><div class="steptitle">Grab the playlist URL.</div><p class="steptext">Open an authorized YouTube video or playlist and copy its link.</p></div>
       <div class="step"><div class="stepnumber">STEP 02 / CONVERT</div><div class="steptitle">Pick your sound quality.</div><p class="steptext">We'll convert the available videos into your chosen audio format. Watch the progress live.</p></div>
       <div class="step"><div class="stepnumber">STEP 03 / DOWNLOAD</div><div class="steptitle">One click. Every track.</div><p class="steptext">Download one audio file or a ZIP containing numbered audio tracks and any skipped-track report.</p></div>
     </div>
@@ -213,6 +213,8 @@
         el("modehint").textContent = one
           ? "Download one video directly as a " + fmt + " file."
           : "Download multiple videos as " + fmt + " files inside one ZIP archive.";
+        el("playlist-format-hint").textContent=fmt+" ZIP ARCHIVE";
+        el("single-format-hint").textContent="ONE "+fmt+" FILE";
         el("formathint").textContent = fmt==="FLAC"
           ? "FLAC files are larger. YouTube audio is compressed; converting to FLAC cannot restore lost detail."
           : "MP3 is best for everyday listening and sharing.";
