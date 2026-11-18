@@ -59,7 +59,25 @@ def smoke_test():
 
 
 class DesktopUpdatesAPI:
-    """Local desktop bridge for verified updates and native file saving."""
+    """Local desktop bridge for updates, saving and user-initiated pasting."""
+
+    def read_clipboard(self):
+        """Read plain text from macOS after the user clicks the PASTE button.
+
+        WebKit's navigator.clipboard.readText() is denied in some embedded
+        windows. The macOS pasteboard API does not require web clipboard
+        permissions. Never read clipboard content on startup or in background.
+        """
+        try:
+            from AppKit import NSPasteboard, NSPasteboardTypeString
+            value = NSPasteboard.generalPasteboard().stringForType_(NSPasteboardTypeString)
+        except Exception:
+            return {"ok": False, "error": "macOS clipboard access is unavailable. Try Command+V."}
+        if not isinstance(value, str) or not value.strip():
+            return {"ok": False, "error": "Clipboard has no text. Copy a YouTube link first."}
+        if len(value) > 8192:
+            return {"ok": False, "error": "Clipboard text is too long for a YouTube link."}
+        return {"ok": True, "text": value.strip()}
 
     def save_mp3(self, job_id):
         """Backward-compatible bridge for clients built before FLAC support."""
