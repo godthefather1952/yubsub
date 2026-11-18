@@ -8,7 +8,7 @@ At GitHub build time, `pip install -r requirements.txt` installs Flask, yt-dlp a
 
 **At user launch time, nothing is installed.** YUBSUB opens as a normal app; the Python interpreter and packages are already inside. The app processes authorized audio directly on the user's Mac.
 
-There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes the unsigned v0.4.2 release only after the owner configures matching Ed25519 update-signing keys.
+There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes the unsigned v0.4.3 release only after the owner configures matching Ed25519 update-signing keys.
 
 ## Build locally on a Mac
 
@@ -28,6 +28,10 @@ Sparkle 2 is embedded when `SPARKLE_PUBLIC_ED_KEY` is configured; the signed Git
 **Single video MP3 saving:** The `DesktopUpdatesAPI.save_mp3` bridge validates an in-process, completed single-video job and uses the native macOS Save As dialog to copy the completed file atomically into the destination chosen by the customer. This avoids WebKit's inline audio playback behavior without changing the playlist ZIP workflow.
 
 Build success is verified with a smoke test that loads the app's Flask routes and detects all three bundled executables. The end-to-end GUI and YouTube download path must also be tested on an actual Intel / Apple silicon device.
+
+## Native Paste button
+
+The embedded macOS WebKit window may deny `navigator.clipboard.readText()`. The Desktop bridge calls `AppKit.NSPasteboard.generalPasteboard()` only when the user clicks **PASTE**, returning plain text to the URL input. GitHub Pages continues using the browser clipboard API.
 
 ## Important limitations
 
