@@ -40,6 +40,9 @@ MAX_TRACKS = max(1, min(200, int(os.getenv("MAX_TRACKS", "50"))))
 MAX_ACTIVE = max(1, int(os.getenv("MAX_ACTIVE_JOBS", "2")))
 MAX_TOTAL = max(10, int(os.getenv("MAX_ARCHIVE_MB", "400"))) * 1024**2
 MAX_TRACK = max(5, int(os.getenv("MAX_TRACK_MB", "60"))) * 1024**2
+# FLAC encodes uncompressed PCM losslessly and is much larger than MP3.
+MAX_FLAC_TRACK = max(5, int(os.getenv("MAX_FLAC_TRACK_MB", "250"))) * 1024**2
+AUDIO_FORMATS = {"mp3", "flac"}
 COOKIE_FILE = Path(os.getenv("YT_COOKIES", str(ROOT / "cookies.txt")))
 JOBS = {}
 LOCK = threading.RLock()
@@ -181,6 +184,10 @@ def run_job(job):
         if not (shutil.which("deno") or shutil.which("node")):
             raise RuntimeError("Deno 2.3+ (or Node 22+) is required for YouTube.")
         mode = job.get("mode", "playlist")
+        audio_format = job.get("format", "mp3")
+        if audio_format not in AUDIO_FORMATS:
+            raise ValueError("Unsupported audio format.")
+        max_track = MAX_FLAC_TRACK if audio_format == "flac" else MAX_TRACK
         update(job, status="reading")
         if mode == "single":
             with yt_dlp.YoutubeDL(yt_options(skip_download=True, noplaylist=True,
@@ -230,11 +237,13 @@ def run_job(job):
                     if total:
                         update(job, track_percent=min(99, int(100 * info.get("downloaded_bytes", 0) / total)))
 
+            codec_options = {"key": "FFmpegExtractAudio", "preferredcodec": audio_format}
+            if audio_format == "mp3":
+                codec_options["preferredquality"] = job["quality"]
             opts = yt_options(format="bestaudio/best", noplaylist=True,
-                              outtmpl=template, max_filesize=MAX_TRACK,
+                              outtmpl=template, max_filesize=max_track,
                               progress_hooks=[progress], postprocessors=[
-                                  {"key": "FFmpegExtractAudio", "preferredcodec": "mp3",
-                                   "preferredquality": job["quality"]},
+                                  codec_options,
                                   {"key": "FFmpegMetadata"}])
             try:
                 try:
@@ -253,19 +262,19 @@ def run_job(job):
                     app.logger.info("Retrying %s with alternate YouTube clients", video_id)
                     result = download_video(video_id, alternate)
                 check_cancel(job)
-                mp3 = Path(prefix + ".mp3")
-                if result or not mp3.is_file():
-                    raise RuntimeError("No MP3 output was produced.")
-                size = mp3.stat().st_size
-                if not size or size > MAX_TRACK:
-                    mp3.unlink(missing_ok=True)
+                audio = Path(prefix + "." + audio_format)
+                if result or not audio.is_file():
+                    raise RuntimeError("No " + audio_format.upper() + " output was produced.")
+                size = audio.stat().st_size
+                if not size or size > max_track:
+                    audio.unlink(missing_ok=True)
                     raise RuntimeError("Track exceeded size limit.")
                 if total_bytes + size > MAX_TOTAL:
-                    mp3.unlink(missing_ok=True)
+                    audio.unlink(missing_ok=True)
                     with LOCK:
                         job["failed"].append(label + ": archive size limit reached")
                     break
-                ready.append(mp3)
+                ready.append(audio)
                 total_bytes += size
                 consecutive_player_errors = 0
                 update(job, succeeded=len(ready))
@@ -289,7 +298,7 @@ def run_job(job):
             first = job["failed"][0] if job["failed"] else "Unknown"
             raise RuntimeError("No tracks could be converted. " + first)
         if mode == "single":
-            # Direct MP3: one downloadable file, no ZIP or numbering.
+            # Direct audio file: one downloadable MP3 or FLAC, no ZIP or numbering.
             update(job, status="complete", archive=str(ready[0]), finished=time.time(),
                    current="", track_percent=100)
             return
@@ -356,14 +365,17 @@ def start():
                    if mode == "single"
                    else "Enter a YouTube playlist link containing list=.")
         return jsonify(error=message), 400
+    audio_format = data.get("format", "mp3")
+    if not isinstance(audio_format, str) or audio_format not in AUDIO_FORMATS:
+        return jsonify(error="Choose MP3 or FLAC output format."), 400
     quality = str(data.get("quality", "192"))
-    if quality not in {"128", "192", "256", "320"}:
+    if audio_format == "mp3" and quality not in {"128", "192", "256", "320"}:
         return jsonify(error="Invalid MP3 bitrate."), 400
     with LOCK:
         if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
             return jsonify(error="Converter is busy. Try again shortly."), 429
         jid = uuid.uuid4().hex
-        job = dict(id=jid, mode=mode, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
+        job = dict(id=jid, mode=mode, format=audio_format, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
                    stop=threading.Event(), status="queued", title="", current="",
                    total=0, done=0, succeeded=0, track_percent=0, failed=[],
                    error=None, archive=None, finished=None)
@@ -380,7 +392,9 @@ def status(jid):
             return jsonify(error="Job not found or expired."), 404
         fields = ("id", "mode", "status", "title", "current", "total", "done", "succeeded",
                   "track_percent", "failed", "error")
-        return jsonify({key: job[key] for key in fields})
+        response = {key: job[key] for key in fields}
+        response["format"] = job.get("format", "mp3")
+        return jsonify(response)
 
 
 @app.delete("/api/jobs/<jid>")
@@ -402,10 +416,14 @@ def download(jid):
         if not job or job["status"] != "complete":
             return jsonify(error="Download is not ready or has expired."), 404
         path, title, mode = job["archive"], job["title"], job.get("mode", "playlist")
+        audio_format = job.get("format", "mp3")
     if not Path(path).is_file():
         return jsonify(error="Download expired."), 410
-    extension = ".mp3" if mode == "single" else ".zip"
-    mimetype = "audio/mpeg" if mode == "single" else "application/zip"
+    if audio_format not in AUDIO_FORMATS:
+        return jsonify(error="Unsupported audio format."), 400
+    extension = ("." + audio_format) if mode == "single" else ".zip"
+    mimetype = ({"mp3": "audio/mpeg", "flac": "audio/flac"}[audio_format]
+                if mode == "single" else "application/zip")
     return send_file(path, as_attachment=True, download_name=safe_name(title) + extension,
                      mimetype=mimetype, max_age=0)
 

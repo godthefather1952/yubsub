@@ -2,9 +2,11 @@
 
 ## YUBSUB desktop app — macOS
 
-**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.4.1)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
+**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.4.2)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
 
-**New in v0.4.1:** Individual MP3 downloads now use a native macOS **Save As** dialog, preventing playable audio from opening inside the app. Playlist ZIP downloads are unchanged. Existing v0.4.0 users can try **Check for Updates** to receive v0.4.1.
+**New in v0.4.2:** Choose **MP3 or FLAC** for individual videos and entire playlists. MP3 remains the default. The FLAC choice hides MP3 bitrate controls and creates real FLAC files using FFmpeg. Playlists contain numbered files in your chosen format inside one ZIP. FLAC files are larger; they don't restore quality already lost in YouTube's compressed source audio.
+
+**Introduced in v0.4.1:** Individual MP3 downloads now use a native macOS **Save As** dialog, preventing playable audio from opening inside the app. Playlist ZIP downloads are unchanged. Existing v0.4.0 users can try **Check for Updates** to receive v0.4.1.
 
 **Introduced in v0.4.0:** Secure Sparkle-powered update checks, Update Now / Later prompts, and a Check for Updates control in the Mac app. Each architecture receives an authenticated Ed25519-signed ZIP from GitHub Releases. Playlist (default) and Single Video modes remain intact. Existing v0.3.0 users must manually install v0.4.0 once before future updates work. [Owner signing-key setup](mac-app/UPDATING.md).
 

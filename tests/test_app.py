@@ -227,3 +227,130 @@ def test_single_video_converts_to_direct_mp3(monkeypatch):
         finally:
             with mod.LOCK:
                 mod.JOBS.pop(job["id"], None)
+
+
+def test_audio_formats_validate_and_default_to_mp3(monkeypatch):
+    class NoRunThread:
+        def __init__(self, *args, **kwargs): pass
+        def start(self): pass
+
+    monkeypatch.setattr(mod.threading, "Thread", NoRunThread)
+    monkeypatch.setattr(mod, "MAX_ACTIVE", 99)
+    client = mod.app.test_client()
+    url = "https://youtu.be/abcdefghijk"
+    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "wav"}).status_code == 400
+    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": None}).status_code == 400
+    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "../flac"}).status_code == 400
+    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "mp3", "quality": "500"}).status_code == 400
+    ids = []
+    try:
+        for payload, expected in (
+            ({"url": url, "mode": "single"}, "mp3"),
+            ({"url": url, "mode": "single", "format": "flac"}, "flac"),
+            ({"url": "https://youtube.com/playlist?list=PL1234567890123",
+              "mode": "playlist", "format": "flac"}, "flac"),
+        ):
+            res = client.post("/api/jobs", json=payload)
+            assert res.status_code == 202, res.json
+            jid = res.json["id"]
+            ids.append(jid)
+            assert mod.JOBS[jid]["format"] == expected
+            assert client.get("/api/jobs/" + jid).json["format"] == expected
+    finally:
+        import shutil
+        with mod.LOCK:
+            for jid in ids:
+                job = mod.JOBS.pop(jid, None)
+                if job:
+                    shutil.rmtree(job["directory"], ignore_errors=True)
+
+
+def test_flac_single_and_playlist_conversion(monkeypatch):
+    class FakeYDL:
+        def __init__(self, opts):
+            self.opts = opts
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def extract_info(self, *args, **kwargs):
+            if self.opts.get("noplaylist"):
+                return {"title": "My song", "id": "abcdefghijk"}
+            return {"title": "FLAC playlist", "entries": [
+                {"id": "abcdefghijk", "title": "My song"},
+                {"id": "lmnopqrstuv", "title": "Another song"},
+            ]}
+        def download(self, urls):
+            codec = self.opts["postprocessors"][0]
+            assert codec["key"] == "FFmpegExtractAudio"
+            assert codec["preferredcodec"] == "flac"
+            assert "preferredquality" not in codec
+            assert self.opts["max_filesize"] == mod.MAX_FLAC_TRACK
+            assert self.opts["postprocessors"][1]["key"] == "FFmpegMetadata"
+            output = self.opts["outtmpl"].replace("%%", "%").replace("%(ext)s", "flac")
+            Path(output).write_bytes(b"fLaC fake audio")
+            return 0
+
+    monkeypatch.setattr(mod.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(mod.yt_dlp, "YoutubeDL", FakeYDL)
+    client = mod.app.test_client()
+    with tempfile.TemporaryDirectory() as directory:
+        for mode in ("single", "playlist"):
+            folder = Path(directory, mode)
+            folder.mkdir()
+            jid = "flac-" + mode
+            job = dict(id=jid, mode=mode, format="flac",
+                       url=("https://www.youtube.com/watch?v=abcdefghijk" if mode == "single"
+                            else "https://youtube.com/playlist?list=PL1234567890123"),
+                       directory=str(folder), stop=threading.Event(), quality="192",
+                       status="queued", title="", current="", total=0, done=0,
+                       succeeded=0, track_percent=0, failed=[], error=None,
+                       archive=None, finished=None)
+            mod.run_job(job)
+            assert job["status"] == "complete", job["error"]
+            with mod.LOCK:
+                mod.JOBS[jid] = job
+            try:
+                response = client.get("/api/jobs/" + jid + "/download")
+                assert response.status_code == 200
+                if mode == "single":
+                    assert response.mimetype == "audio/flac"
+                    assert response.data == b"fLaC fake audio"
+                    assert ".flac" in response.headers["Content-Disposition"]
+                    assert Path(job["archive"]).suffix == ".flac"
+                else:
+                    assert response.mimetype == "application/zip"
+                    with zipfile.ZipFile(job["archive"]) as archive:
+                        assert archive.namelist() == [
+                            "001 - My song.flac", "002 - Another song.flac"]
+            finally:
+                with mod.LOCK:
+                    mod.JOBS.pop(jid, None)
+
+
+def test_legacy_mp3_postprocessor_still_uses_bitrate(monkeypatch):
+    class FakeYDL:
+        def __init__(self, opts): self.opts = opts
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def extract_info(self, *args, **kwargs):
+            return {"title": "Test", "id": "abcdefghijk"}
+        def download(self, urls):
+            assert self.opts["postprocessors"][0] == {
+                "key": "FFmpegExtractAudio", "preferredcodec": "mp3",
+                "preferredquality": "320"}
+            output = self.opts["outtmpl"].replace("%%", "%").replace("%(ext)s", "mp3")
+            Path(output).write_bytes(b"ID3")
+            return 0
+
+    monkeypatch.setattr(mod.shutil, "which", lambda _: "/usr/bin/fake")
+    monkeypatch.setattr(mod.yt_dlp, "YoutubeDL", FakeYDL)
+    with tempfile.TemporaryDirectory() as directory:
+        folder = Path(directory, "single")
+        folder.mkdir()
+        job = dict(id="legacy-mp3", mode="single", url="https://www.youtube.com/watch?v=abcdefghijk",
+                   directory=str(folder), stop=threading.Event(), quality="320",
+                   status="queued", title="", current="", total=0, done=0,
+                   succeeded=0, track_percent=0, failed=[], error=None,
+                   archive=None, finished=None)
+        mod.run_job(job)
+        assert job["status"] == "complete", job["error"]
+        assert Path(job["archive"]).suffix == ".mp3"
