@@ -326,7 +326,36 @@
           el("download-text").textContent=previous;
         }finally{delete link.dataset.saving;}
       });
-      el("paste").addEventListener("click",async()=>{try{el("url").value=await navigator.clipboard.readText();el("url").focus();clearError();}catch{el("url").focus();error("Clipboard access is unavailable here. Paste the link directly.");}});
+      el("paste").addEventListener("click",async()=>{
+        const field=el("url");
+        clearError();
+        try{
+          let clipboardText;
+          // Native Mac app: use macOS Pasteboard, not WebKit's blocked
+          // navigator.clipboard permission path. Only read after a click.
+          const nativeApi=window.pywebview?.api;
+          if(nativeApi&&typeof nativeApi.read_clipboard==="function"){
+            const result=await nativeApi.read_clipboard();
+            if(!result.ok)throw Error(result.error||"Could not read clipboard.");
+            clipboardText=result.text;
+          }else if(navigator.clipboard&&typeof navigator.clipboard.readText==="function"){
+            // Normal browser / GitHub Pages fallback.
+            clipboardText=await navigator.clipboard.readText();
+          }else{
+            throw Error("Clipboard permission is unavailable. Click the link field and press Command+V.");
+          }
+          if(typeof clipboardText!=="string"||!clipboardText.trim()){
+            throw Error("Clipboard has no text. Copy a YouTube link first.");
+          }
+          field.value=clipboardText.trim();
+          field.focus();
+          field.dispatchEvent(new Event("input",{bubbles:true}));
+          clearError();
+        }catch(err){
+          field.focus();
+          error(err.message||"Could not paste automatically. Click the link field and press Command+V.");
+        }
+      });
       el("form").addEventListener("submit",async event=>{
         event.preventDefault();if(busy)return;
         clearTimeout(pollTimer);jobId=null;retries=0;startUI();
