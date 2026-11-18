@@ -1,33 +1,30 @@
-# YUBSUB Desktop v0.4.2 — MP3 and FLAC output formats
+# YUBSUB Desktop v0.4.3 — Reliable macOS Paste button
 
-## New in v0.4.2
+## Fixed in v0.4.3
 
-- **Audio Format** selector: choose MP3 or FLAC. **MP3 is the default.**
-- **Single Video:** convert one video to a direct `.mp3` or `.flac` file using the native macOS Save As dialog.
-- **Playlist:** convert multiple videos to numbered MP3 or FLAC files inside a ZIP archive.
-- MP3 bitrate options remain available (128, 192, 256, 320 kbps); they hide when FLAC is selected because FLAC has no MP3 bitrate setting.
-- FLAC files are usually larger. Since YouTube audio is typically already lossy-compressed, FLAC conversion does **not** restore lost source fidelity.
-- The current progress display, cancellation, signed Sparkle updates, and local-only processing remain in place.
+The **PASTE** button in YUBSUB Desktop now reads text directly from the **macOS clipboard** when clicked. Previously, WebKit's browser clipboard API could deny access and show "Clipboard access is unavailable here" even when a YouTube link was copied.
+
+- Native `NSPasteboard` integration avoids embedded WebKit clipboard-permission failures.
+- The Paste button works for both **Single Video** and **Playlist** modes.
+- The regular browser version still uses the web clipboard API.
+- Empty clipboards and permission failures show actionable messages.
+- No clipboard content is read at startup, saved or logged by YUBSUB; reading occurs when you click Paste.
+
+All features from v0.4.2 are preserved, including MP3 or FLAC conversion, playlist ZIPs, the Mac Save As dialog, progress reporting and signed Sparkle automatic updates.
 
 ## Install or update
 
-Download **YUBSUB.app** for your Mac:
-- **Intel:** `YUBSUB-macOS-Intel.zip`
-- **Apple Silicon:** `YUBSUB-macOS-Apple-Silicon.zip`
+Open YUBSUB and click **Check for Updates**. The release contains both Intel and Apple silicon versions, with the same signature key as earlier updates.
 
-Existing users on v0.4.0 or v0.4.1 can open YUBSUB and try **Check for Updates**. If in-app updating fails, replace the installed app manually with the appropriate downloaded version.
+Downloadable packages:
+- `YUBSUB-macOS-Intel.zip`
+- `YUBSUB-macOS-Apple-Silicon.zip`
 
-No Terminal, Python, Homebrew or additional FFmpeg installation is necessary. Both architectures ship with the audio conversion dependencies included.
+If the update prompt fails, download and replace your installed `YUBSUB.app` with the correct version from the GitHub release.
 
-## Compatibility, security, rights
+## Compatibility notes
 
-- ZIP downloads and MP3 remain backwards-compatible; omitting the new `format` API field defaults to MP3.
-- Official release ZIPs and the two architecture-specific Sparkle appcasts are signed with the existing Ed25519 signing key; keys never ship in source.
-- The app is not yet Apple Developer ID signed/notarized, so macOS Gatekeeper may still show first-launch warnings.
-- Built with GitHub macOS 15 runners; test on your supported Mac devices.
-- Download audio only when you own or have permission to use it.
-- FLAC output may consume much more storage, and existing file-size / archive-size safeguards still apply.
-
-## Included third-party components
-
-This release bundles Python dependencies, yt-dlp, Deno, FFmpeg, FFprobe, and Sparkle. FFmpeg/FFprobe static distribution credits and licenses are packaged inside the app. Review redistribution obligations before selling.
+- Signed Sparkle updates are separate from Apple Developer ID signing/notarization; the unsigned Mac app may still show a first-launch Gatekeeper warning.
+- PyInstaller packages all local Python, yt-dlp, Deno and FFmpeg dependencies.
+- Only download content you own or have permission to download.
+- Test the PASTE button on a real Mac after updating to confirm local clipboard permissions and the full GUI flow.
