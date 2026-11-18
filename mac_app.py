@@ -62,7 +62,11 @@ class DesktopUpdatesAPI:
     """Local desktop bridge for verified updates and native file saving."""
 
     def save_mp3(self, job_id):
-        """Save an already-converted MP3 with a native macOS Save As dialog.
+        """Backward-compatible bridge for clients built before FLAC support."""
+        return self.save_audio(job_id)
+
+    def save_audio(self, job_id):
+        """Save a completed MP3 or FLAC with a native macOS Save As dialog.
 
         Never accepts an arbitrary source path from JavaScript. A random job ID
         selects only completed single-video jobs from our in-process backend.
@@ -78,29 +82,33 @@ class DesktopUpdatesAPI:
         with backend.LOCK:
             job = backend.JOBS.get(job_id)
             if not job or job["status"] != "complete" or job.get("mode") != "single":
-                return {"ok": False, "error": "MP3 is not ready or has expired."}
+                return {"ok": False, "error": "Audio is not ready or has expired."}
             source = Path(job["archive"])
             job_dir = Path(job["directory"])
-            filename = backend.safe_name(job["title"], "YouTube video") + ".mp3"
+            audio_format = job.get("format", "mp3")
+            if audio_format not in backend.AUDIO_FORMATS:
+                return {"ok": False, "error": "Unsupported audio format."}
+            extension = "." + audio_format
+            filename = backend.safe_name(job["title"], "YouTube video") + extension
 
-        # Only save the audio produced in the private job directory.
-        if (source.suffix.lower() != ".mp3"
+        # Only save a converted file inside its completed job directory.
+        if (source.suffix.lower() != extension
                 or not source.is_file()
                 or not source.resolve().is_relative_to(job_dir.resolve())):
-            return {"ok": False, "error": "MP3 has expired or is unavailable."}
+            return {"ok": False, "error": "Audio has expired or is unavailable."}
 
         try:
             choices = webview.windows[0].create_file_dialog(
                 webview.SAVE_DIALOG,
                 save_filename=filename,
-                file_types=("MP3 audio (*.mp3)",),
+                file_types=(audio_format.upper() + " audio (*" + extension + ")",),
             )
             if not choices:
                 return {"ok": False, "cancelled": True}
             destination = Path(choices if isinstance(choices, str) else choices[0])
-            # A user may edit the filename; always save it with the MP3 format.
-            if destination.suffix.lower() != ".mp3":
-                destination = destination.with_suffix(".mp3")
+            # A user may edit the filename; ensure it matches the file's codec.
+            if destination.suffix.lower() != extension:
+                destination = destination.with_suffix(extension)
             if not destination.parent.is_dir():
                 return {"ok": False, "error": "The selected folder no longer exists."}
 
@@ -121,8 +129,8 @@ class DesktopUpdatesAPI:
                     temporary.unlink(missing_ok=True)
             return {"ok": True, "path": str(destination)}
         except (OSError, ValueError, IndexError):
-            backend.app.logger.exception("Cannot save single-video MP3")
-            return {"ok": False, "error": "Could not save the MP3. Check folder permissions and available disk space."}
+            backend.app.logger.exception("Cannot save single-video audio file")
+            return {"ok": False, "error": "Could not save the audio file. Check folder permissions and available disk space."}
 
     def available(self):
         import sparkle_updater
