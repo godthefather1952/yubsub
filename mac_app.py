@@ -59,7 +59,70 @@ def smoke_test():
 
 
 class DesktopUpdatesAPI:
-    """Small, local pywebview bridge; Sparkle performs all privileged operations."""
+    """Local desktop bridge for verified updates and native file saving."""
+
+    def save_mp3(self, job_id):
+        """Save an already-converted MP3 with a native macOS Save As dialog.
+
+        Never accepts an arbitrary source path from JavaScript. A random job ID
+        selects only completed single-video jobs from our in-process backend.
+        """
+        import re
+        import shutil
+        import tempfile
+        import webview
+        import app as backend
+
+        if not isinstance(job_id, str) or not re.fullmatch(r"[0-9a-f]{32}", job_id):
+            return {"ok": False, "error": "Invalid download request."}
+        with backend.LOCK:
+            job = backend.JOBS.get(job_id)
+            if not job or job["status"] != "complete" or job.get("mode") != "single":
+                return {"ok": False, "error": "MP3 is not ready or has expired."}
+            source = Path(job["archive"])
+            job_dir = Path(job["directory"])
+            filename = backend.safe_name(job["title"], "YouTube video") + ".mp3"
+
+        # Only save the audio produced in the private job directory.
+        if (source.suffix.lower() != ".mp3"
+                or not source.is_file()
+                or not source.resolve().is_relative_to(job_dir.resolve())):
+            return {"ok": False, "error": "MP3 has expired or is unavailable."}
+
+        try:
+            choices = webview.windows[0].create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename=filename,
+                file_types=("MP3 audio (*.mp3)",),
+            )
+            if not choices:
+                return {"ok": False, "cancelled": True}
+            destination = Path(choices if isinstance(choices, str) else choices[0])
+            # A user may edit the filename; always save it with the MP3 format.
+            if destination.suffix.lower() != ".mp3":
+                destination = destination.with_suffix(".mp3")
+            if not destination.parent.is_dir():
+                return {"ok": False, "error": "The selected folder no longer exists."}
+
+            # Copy to a sibling temporary file, then replace atomically so a
+            # disk-full or permission error cannot leave a partial MP3 behind.
+            temporary = None
+            try:
+                fd, temp_name = tempfile.mkstemp(
+                    prefix=".yubsub-", suffix=".part", dir=str(destination.parent)
+                )
+                temporary = Path(temp_name)
+                with os.fdopen(fd, "wb") as output, source.open("rb") as audio:
+                    shutil.copyfileobj(audio, output)
+                os.replace(temporary, destination)
+                temporary = None
+            finally:
+                if temporary is not None:
+                    temporary.unlink(missing_ok=True)
+            return {"ok": True, "path": str(destination)}
+        except (OSError, ValueError, IndexError):
+            backend.app.logger.exception("Cannot save single-video MP3")
+            return {"ok": False, "error": "Could not save the MP3. Check folder permissions and available disk space."}
 
     def available(self):
         import sparkle_updater
