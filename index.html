@@ -146,7 +146,15 @@
             <div class="urlrow"><input id="url" type="url" inputmode="url" required spellcheck="false" autocomplete="off" placeholder="https://youtube.com/playlist?list=..." aria-describedby="modehint"><button type="button" class="paste" id="paste">PASTE</button></div>
             <p class="note" id="modehint">Download multiple videos as one MP3 ZIP archive.</p>
             <div class="middle">
-              <div class="field-head"><label><span class="num">03 /</span> CHOOSE AUDIO QUALITY</label><span class="field-help">MP3 bitrate</span></div>
+              <div class="field-head"><span class="mode-heading"><span class="num">03 /</span> AUDIO FORMAT</span><span class="field-help">Choose MP3 or FLAC</span></div>
+              <div class="mode-grid" role="radiogroup" aria-label="Audio output format">
+                <label class="mode-option"><input type="radio" name="format" value="mp3" checked><span><b>MP3</b><small>SMALLER FILES</small></span></label>
+                <label class="mode-option"><input type="radio" name="format" value="flac"><span><b>FLAC</b><small>LARGER FILES</small></span></label>
+              </div>
+              <p class="note" id="formathint">MP3 is best for everyday listening and sharing.</p>
+            </div>
+            <div class="middle" id="quality-section">
+              <div class="field-head"><label><span class="num">04 /</span> CHOOSE AUDIO QUALITY</label><span class="field-help">MP3 bitrate</span></div>
               <div class="quality-grid" role="group" aria-label="MP3 bitrate">
                 <label class="quality-option"><input type="radio" name="quality" value="128"><span><b>128</b><small>KBPS</small></span></label>
                 <label class="quality-option"><input type="radio" name="quality" value="192" checked><span><b>192</b><small>KBPS</small></span></label>
@@ -174,8 +182,8 @@
   <section class="strip" id="how" aria-label="How YUBSUB works">
     <div class="container stripinner">
       <div class="step"><div class="stepnumber">STEP 01 / COPY</div><div class="steptitle">Grab the playlist URL.</div><p class="steptext">Open a public YouTube playlist or YouTube Music playlist and copy its link.</p></div>
-      <div class="step"><div class="stepnumber">STEP 02 / CONVERT</div><div class="steptitle">Pick your sound quality.</div><p class="steptext">We'll convert the available videos to MP3 one at a time. Watch the progress live.</p></div>
-      <div class="step"><div class="stepnumber">STEP 03 / DOWNLOAD</div><div class="steptitle">One click. Every track.</div><p class="steptext">Grab a single ZIP with numbered MP3s and a report of any tracks that were skipped.</p></div>
+      <div class="step"><div class="stepnumber">STEP 02 / CONVERT</div><div class="steptitle">Pick your sound quality.</div><p class="steptext">We'll convert the available videos into your chosen audio format. Watch the progress live.</p></div>
+      <div class="step"><div class="stepnumber">STEP 03 / DOWNLOAD</div><div class="steptitle">One click. Every track.</div><p class="steptext">Download one audio file or a ZIP containing numbered audio tracks and any skipped-track report.</p></div>
     </div>
   </section>
   <footer class="container footer">
@@ -192,24 +200,33 @@
       const API_ROOT = LOCAL ? "" : String(window.YUBSUB_API_BASE_URL || "").trim().replace(/\/+$/, "");
       const NEEDS_API = !LOCAL && !API_ROOT;
       const apiUrl = path => API_ROOT + path;
-      let jobId = null, pollTimer = null, busy = false, retries = 0, jobMode = "playlist";
+      let jobId = null, pollTimer = null, busy = false, retries = 0, jobMode = "playlist", jobFormat = "mp3";
       const modeRadios = Array.from(document.querySelectorAll('input[name="mode"]'));
+      const formatRadios = Array.from(document.querySelectorAll('input[name="format"]'));
       const selectedMode = () => document.querySelector('input[name="mode"]:checked')?.value || "playlist";
+      const selectedFormat = () => document.querySelector('input[name="format"]:checked')?.value || "mp3";
       const updateModeUI = () => {
         const one = selectedMode() === "single";
+        const fmt = selectedFormat().toUpperCase();
         el("linklabel").textContent = one ? "PASTE VIDEO LINK" : "PASTE PLAYLIST LINK";
         el("url").placeholder = one ? "https://youtube.com/watch?v=..." : "https://youtube.com/playlist?list=...";
-        el("modehint").textContent = one ? "Download one video directly as an MP3 file." : "Download multiple videos as one MP3 ZIP archive.";
-        if (!busy) el("gotext").textContent = one ? "DOWNLOAD MY MP3" : "BUILD MY MP3 ZIP";
+        el("modehint").textContent = one
+          ? "Download one video directly as a " + fmt + " file."
+          : "Download multiple videos as " + fmt + " files inside one ZIP archive.";
+        el("formathint").textContent = fmt==="FLAC"
+          ? "FLAC files are larger. YouTube audio is compressed; converting to FLAC cannot restore lost detail."
+          : "MP3 is best for everyday listening and sharing.";
+        el("quality-section").hidden = fmt==="FLAC";
+        if (!busy) el("gotext").textContent = one ? "DOWNLOAD MY " + fmt : "BUILD MY " + fmt + " ZIP";
       };
-      modeRadios.forEach(input => input.addEventListener("change", () => { updateModeUI(); clearError(); }));
+      [...modeRadios,...formatRadios].forEach(input => input.addEventListener("change", () => { updateModeUI(); clearError(); }));
       const safeStore = (value) => { try { if(value) sessionStorage.setItem(JOB_KEY,value); else sessionStorage.removeItem(JOB_KEY); } catch {} };
       const savedJob = () => { try { return sessionStorage.getItem(JOB_KEY); } catch { return null; } };
       const error = message => { el("error").textContent = message; el("error").hidden = false; };
       const clearError = () => { el("error").hidden = true; el("error").textContent = ""; };
       const meter = value => { const n = Math.max(0,Math.min(100,Math.round(value))); el("fill").style.width = n + "%"; el("percent").textContent = n + "%"; el("progress").setAttribute("aria-valuenow",String(n)); };
-      const end = () => { busy=false; el("go").disabled=false; modeRadios.forEach(input => input.disabled=false); updateModeUI(); el("cancel").hidden=true; };
-      const startUI = () => { jobMode=selectedMode(); busy=true; modeRadios.forEach(input => input.disabled=true); el("go").disabled=true; el("gotext").textContent=jobMode==="single"?"CONVERTING VIDEO…":"CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
+      const end = () => { busy=false; el("go").disabled=false; [...modeRadios,...formatRadios].forEach(input => input.disabled=false); updateModeUI(); el("cancel").hidden=true; };
+      const startUI = () => { jobMode=selectedMode(); jobFormat=selectedFormat(); busy=true; [...modeRadios,...formatRadios].forEach(input => input.disabled=true); el("go").disabled=true; el("gotext").textContent=jobMode==="single"?"CONVERTING VIDEO…":"CONVERTING PLAYLIST…"; el("cancel").hidden=false; el("results").hidden=false; el("download").hidden=true; el("skipped").hidden=true; el("stage").textContent="Starting conversion"; el("current").textContent="Connecting to converter…"; el("count").textContent="—"; el("system").textContent="WORKING"; clearError(); meter(1); };
       async function api(path, options) { const r=await fetch(apiUrl(path),{cache:"no-store",...options}); const data=await r.json().catch(()=>({})); if(!r.ok) throw Error(data.error||("Server returned "+r.status)); return data; }
       function skipped(items) { const list=el("skiplist"); list.replaceChildren(); if(!items||!items.length){el("skipped").hidden=true;return;} for(const message of items){const li=document.createElement("li");li.textContent=message;list.append(li);} el("skiptitle").textContent=items.length+" skipped track(s)"; el("skipped").hidden=false; }
       function next() { clearTimeout(pollTimer); pollTimer=setTimeout(poll,1300); }
@@ -223,16 +240,22 @@
             const radio=modeRadios.find(input=>input.value===jobMode);
             if(radio && !radio.checked){radio.checked=true;updateModeUI();}
           }
+          if(s.format==="flac"||s.format==="mp3") {
+            jobFormat=s.format;
+            const radio=formatRadios.find(input=>input.value===jobFormat);
+            if(radio && !radio.checked){radio.checked=true;updateModeUI();}
+          }
           el("count").textContent=s.total?(s.done+" / "+s.total+(jobMode==="single"?" VIDEO":" TRACKS")):"SCANNING";
           el("current").textContent=s.current||"";
           skipped(s.failed);
           if(s.status==="queued"||s.status==="reading") { el("stage").textContent=jobMode==="single"?"Reading video":"Reading playlist"; el("current").textContent=jobMode==="single"?"Checking video details…":"Finding available tracks…"; meter(2); }
-          else if(s.status==="downloading") { el("stage").textContent=jobMode==="single"?"Converting video to MP3":"Converting MP3 files"; meter(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3); }
+          else if(s.status==="downloading") { el("stage").textContent=jobMode==="single"?"Converting video to "+jobFormat.toUpperCase():"Converting "+jobFormat.toUpperCase()+" files"; meter(s.total?(s.done+(s.track_percent||0)/100)/s.total*95:3); }
           else if(s.status==="zipping") { el("stage").textContent="Packaging your ZIP"; meter(97); }
           else if(s.status==="complete") {
-            el("stage").textContent=jobMode==="single"?"Your MP3 is ready":"Your ZIP is ready";
-            el("download-text").textContent=jobMode==="single"?"↓ DOWNLOAD YOUR MP3":"↓ DOWNLOAD YOUR MP3 ZIP";
-            el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.title?" · "+s.title:"");
+            const fmt=jobFormat.toUpperCase();
+            el("stage").textContent=jobMode==="single"?"Your "+fmt+" is ready":"Your "+fmt+" ZIP is ready";
+            el("download-text").textContent=jobMode==="single"?"↓ DOWNLOAD YOUR "+fmt:"↓ DOWNLOAD YOUR "+fmt+" ZIP";
+            el("current").textContent=s.succeeded+" "+fmt+(s.succeeded===1?"":" files")+" converted"+(s.title?" · "+s.title:"");
             meter(100);
             el("download").href=apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/download");
             el("download").hidden=false;el("system").textContent="COMPLETE";safeStore(null);end();return;
@@ -265,15 +288,14 @@
           if(!result.ok)error(result.error||"Update check could not start.");
         } catch(e){error("Unable to check for updates: "+e.message);}
       });
-      // WKWebView treats audio/mpeg as playable media and may navigate to it
-      // instead of downloading it. For the native app, bypass navigation and
-      // use a macOS Save As panel to write the finished MP3 directly to disk.
+      // WKWebView treats audio files as playable media and may navigate to them
+      // instead of downloading. A native Save As dialog writes MP3/FLAC to disk.
       // Plain web-browser users retain the existing attachment URL behavior.
       el("download").addEventListener("click",async event=>{
         if(jobMode!=="single"||!window.pywebview)return;
         event.preventDefault();
         const apiBridge=window.pywebview.api;
-        if(!apiBridge||typeof apiBridge.save_mp3!=="function"){
+        if(!apiBridge||typeof apiBridge.save_audio!=="function"){
           error("The native save dialog is unavailable. Restart YUBSUB and try again.");
           return;
         }
@@ -285,14 +307,14 @@
         el("download-text").textContent="SELECT WHERE TO SAVE…";
         clearError();
         try{
-          const result=await apiBridge.save_mp3(jobId);
+          const result=await apiBridge.save_audio(jobId);
           if(result.ok){
-            el("stage").textContent="MP3 saved successfully";
+            el("stage").textContent=jobFormat.toUpperCase()+" saved successfully";
             el("current").textContent="Saved to "+result.path;
             el("system").textContent="SAVED";
-            el("download-text").textContent="↓ SAVE MP3 AGAIN";
+            el("download-text").textContent="↓ SAVE "+jobFormat.toUpperCase()+" AGAIN";
           }else if(!result.cancelled){
-            error(result.error||"Unable to save your MP3.");
+            error(result.error||"Unable to save your audio file.");
             el("download-text").textContent=previous;
           }else{
             el("download-text").textContent=previous;
@@ -308,7 +330,7 @@
         clearTimeout(pollTimer);jobId=null;retries=0;startUI();
         const checked=document.querySelector('input[name="quality"]:checked');
         try{
-          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:jobMode,url:el("url").value.trim(),quality:checked?checked.value:"192"})});
+          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:jobMode,format:jobFormat,url:el("url").value.trim(),quality:checked?checked.value:"192"})});
           jobId=job.id;safeStore(jobId);await poll();
         }catch(e){error(e.message);el("system").textContent="READY TO RUN";end();}
       });
