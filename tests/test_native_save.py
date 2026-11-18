@@ -17,15 +17,15 @@ class SavePanel:
         return self.selection
 
 
-def fixture_job(tmp_path, mode="single"):
+def fixture_job(tmp_path, mode="single", audio_format="mp3"):
     job_id = "c" * 32
     folder = tmp_path / "conversion"
     folder.mkdir()
-    source = folder / "Track.mp3"
+    source = folder / ("Track." + audio_format)
     source.write_bytes(b"ID3 audio test content")
     with backend.LOCK:
         backend.JOBS[job_id] = {
-            "id": job_id, "status": "complete", "mode": mode,
+            "id": job_id, "status": "complete", "mode": mode, "format": audio_format,
             "directory": str(folder), "archive": str(source),
             "title": "Track / Title?",
         }
@@ -106,5 +106,41 @@ def test_frontend_uses_native_save_without_audio_navigation():
     assert mac_ui == pages_ui
     assert 'if(jobMode!=="single"||!window.pywebview)return;' in mac_ui
     assert "event.preventDefault();" in mac_ui
-    assert "await apiBridge.save_mp3(jobId)" in mac_ui
-    assert "MP3 saved successfully" in mac_ui
+    assert "await apiBridge.save_audio(jobId)" in mac_ui
+    assert 'jobFormat.toUpperCase()+" saved successfully"' in mac_ui
+
+
+def test_flac_native_save_uses_correct_extension_and_file_type(tmp_path, monkeypatch):
+    jid, source = fixture_job(tmp_path, audio_format="flac")
+    chosen = tmp_path / "Mixdown.mp3"  # user types wrong extension
+    panel = SavePanel((str(chosen),))
+    monkeypatch.setitem(sys.modules, "webview",
+                        types.SimpleNamespace(SAVE_DIALOG=30, windows=[panel]))
+    try:
+        result = DesktopUpdatesAPI().save_audio(jid)
+        assert result["ok"] is True
+        assert Path(result["path"]) == tmp_path / "Mixdown.flac"
+        assert (tmp_path / "Mixdown.flac").read_bytes() == source.read_bytes()
+        assert panel.calls == [(30, {
+            "save_filename": "Track _ Title_.flac",
+            "file_types": ("FLAC audio (*.flac)",),
+        })]
+        assert source.is_file()
+    finally:
+        clear_job(jid)
+
+
+def test_flac_save_rejects_mismatch_between_requested_codec_and_file(tmp_path, monkeypatch):
+    jid, source = fixture_job(tmp_path)
+    panel = SavePanel((str(tmp_path / "wrong.flac"),))
+    monkeypatch.setitem(sys.modules, "webview",
+                        types.SimpleNamespace(SAVE_DIALOG=30, windows=[panel]))
+    try:
+        with backend.LOCK:
+            backend.JOBS[jid]["format"] = "flac"
+        result = DesktopUpdatesAPI().save_audio(jid)
+        assert result["ok"] is False
+        assert panel.calls == []
+        assert source.is_file()
+    finally:
+        clear_job(jid)
