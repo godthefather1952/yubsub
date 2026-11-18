@@ -2,9 +2,11 @@
 
 ## YUBSUB desktop app — macOS
 
-**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.4.2)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
+**[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.4.3)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
 
-**New in v0.4.2:** Choose **MP3 or FLAC** for individual videos and entire playlists. MP3 remains the default. The FLAC choice hides MP3 bitrate controls and creates real FLAC files using FFmpeg. Playlists contain numbered files in your chosen format inside one ZIP. FLAC files are larger; they don't restore quality already lost in YouTube's compressed source audio.
+**New in v0.4.3:** The macOS **Paste** button uses the native Mac clipboard instead of WebKit's restricted browser clipboard API. Copy a link, click Paste, and the URL appears in the input; normal browser visitors keep the existing clipboard method.
+
+**Introduced in v0.4.2:** Choose **MP3 or FLAC** for individual videos and entire playlists. MP3 remains the default. The FLAC choice hides MP3 bitrate controls and creates real FLAC files using FFmpeg. Playlists contain numbered files in your chosen format inside one ZIP. FLAC files are larger; they don't restore quality already lost in YouTube's compressed source audio.
 
 **Introduced in v0.4.1:** Individual MP3 downloads now use a native macOS **Save As** dialog, preventing playable audio from opening inside the app. Playlist ZIP downloads are unchanged. Existing v0.4.0 users can try **Check for Updates** to receive v0.4.1.
 
