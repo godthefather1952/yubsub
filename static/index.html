@@ -265,6 +265,43 @@
           if(!result.ok)error(result.error||"Update check could not start.");
         } catch(e){error("Unable to check for updates: "+e.message);}
       });
+      // WKWebView treats audio/mpeg as playable media and may navigate to it
+      // instead of downloading it. For the native app, bypass navigation and
+      // use a macOS Save As panel to write the finished MP3 directly to disk.
+      // Plain web-browser users retain the existing attachment URL behavior.
+      el("download").addEventListener("click",async event=>{
+        if(jobMode!=="single"||!window.pywebview)return;
+        event.preventDefault();
+        const apiBridge=window.pywebview.api;
+        if(!apiBridge||typeof apiBridge.save_mp3!=="function"){
+          error("The native save dialog is unavailable. Restart YUBSUB and try again.");
+          return;
+        }
+        if(!jobId)return;
+        const link=el("download");
+        if(link.dataset.saving==="true")return;
+        link.dataset.saving="true";
+        const previous=el("download-text").textContent;
+        el("download-text").textContent="SELECT WHERE TO SAVE…";
+        clearError();
+        try{
+          const result=await apiBridge.save_mp3(jobId);
+          if(result.ok){
+            el("stage").textContent="MP3 saved successfully";
+            el("current").textContent="Saved to "+result.path;
+            el("system").textContent="SAVED";
+            el("download-text").textContent="↓ SAVE MP3 AGAIN";
+          }else if(!result.cancelled){
+            error(result.error||"Unable to save your MP3.");
+            el("download-text").textContent=previous;
+          }else{
+            el("download-text").textContent=previous;
+          }
+        }catch(e){
+          error("Could not open Save dialog: "+e.message);
+          el("download-text").textContent=previous;
+        }finally{delete link.dataset.saving;}
+      });
       el("paste").addEventListener("click",async()=>{try{el("url").value=await navigator.clipboard.readText();el("url").focus();clearError();}catch{el("url").focus();error("Clipboard access is unavailable here. Paste the link directly.");}});
       el("form").addEventListener("submit",async event=>{
         event.preventDefault();if(busy)return;
