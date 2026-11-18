@@ -1,6 +1,5 @@
 """Regression tests for native macOS MP3 saving (no GUI or YouTube needed)."""
 import sys
-import tempfile
 import types
 from pathlib import Path
 
@@ -49,7 +48,7 @@ def test_mp3_native_save_dialog_writes_file_and_keeps_source(tmp_path, monkeypat
     try:
         result = DesktopUpdatesAPI().save_mp3(jid)
         assert result["ok"] is True
-        saved = destination / "My favorite.mp3" if False else destination / "My favorite song.mp3"
+        saved = destination / "My favorite song.mp3"
         assert result["path"] == str(saved)
         assert saved.read_bytes() == b"ID3 audio test content"
         assert source.read_bytes() == b"ID3 audio test content"
