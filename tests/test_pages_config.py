@@ -32,4 +32,8 @@ def test_playlist_mode_is_default_on_both_frontends():
     assert 'name="mode" value="playlist" checked' in root
     assert 'name="mode" value="single"' in root
     assert "mode:jobMode" in root
-    assert 'jobMode==="single"?"↓ DOWNLOAD YOUR MP3":"↓ DOWNLOAD YOUR MP3 ZIP"' in root
+    assert 'name="format" value="mp3" checked' in root
+    assert 'name="format" value="flac"' in root
+    assert "format:jobFormat" in root
+    assert 'el("quality-section").hidden = fmt==="FLAC"' in root
+    assert '"↓ DOWNLOAD YOUR "+fmt' in root
