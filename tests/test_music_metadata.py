@@ -1,5 +1,5 @@
 """Offline metadata-tagging regression tests. Providers are always stubbed."""
-from mutagen.id3 import ID3
+from mutagen.id3 import ID3, TDRC
 import music_metadata as mm
 
 
@@ -86,6 +86,9 @@ def test_mp3_id3_tags_and_cover(monkeypatch, tmp_path):
 def test_fallback_without_provider(monkeypatch, tmp_path):
     song = tmp_path / "fallback.mp3"
     song.write_bytes(b"\x00" * 32)
+    inherited = ID3()
+    inherited.add(TDRC(encoding=3, text=["2025"]))  # YouTube upload date.
+    inherited.save(song)
     monkeypatch.setattr(mm, "_musicbrainz_match", lambda *_: None)
     monkeypatch.setattr(mm, "_youtube_art", lambda *_: (None, None))
     result = mm.tag_mp3(song, {"title": "Uploader - Example Song"})
