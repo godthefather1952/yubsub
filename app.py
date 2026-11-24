@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
 from flask import Flask, jsonify, request, send_file
+from music_metadata import tag_mp3
 
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__)
@@ -186,8 +187,12 @@ def run_job(job):
             prefix = str(folder / label)
             template = prefix.replace("%", "%%") + ".%(ext)s"
 
+            source_info = {}
+
             def progress(info):
                 check_cancel(job)
+                if isinstance(info.get("info_dict"), dict):
+                    source_info.update(info["info_dict"])
                 if info.get("status") == "downloading":
                     total = info.get("total_bytes") or info.get("total_bytes_estimate")
                     if total:
@@ -219,6 +224,15 @@ def run_job(job):
                 mp3 = Path(prefix + ".mp3")
                 if result or not mp3.is_file():
                     raise RuntimeError("No MP3 output was produced.")
+                if job.get("metadata", True):
+                    update(job, current="Tagging " + track)
+                    try:
+                        tagged = tag_mp3(mp3, item, source_info)
+                        with LOCK:
+                            job.setdefault("tagged", []).append(tagged)
+                    except Exception as tag_error:
+                        # A metadata provider outage must never discard a good MP3.
+                        app.logger.warning("Metadata unavailable for %s: %s", video_id, tag_error)
                 size = mp3.stat().st_size
                 if not size or size > MAX_TRACK:
                     mp3.unlink(missing_ok=True)
@@ -309,13 +323,16 @@ def start():
     if not url:
         return jsonify(error="Enter a YouTube playlist link containing list=."), 400
     quality = str(data.get("quality", "192"))
+    if not isinstance(data.get("metadata", True), bool):
+        return jsonify(error="Invalid metadata setting."), 400
     if quality not in {"128", "192", "256", "320"}:
         return jsonify(error="Invalid MP3 bitrate."), 400
     with LOCK:
         if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
             return jsonify(error="Converter is busy. Try again shortly."), 429
         jid = uuid.uuid4().hex
-        job = dict(id=jid, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
+        job = dict(id=jid, url=url, quality=quality, metadata=data.get("metadata", True),
+                   tagged=[], directory=tempfile.mkdtemp(prefix="yubsub_"),
                    stop=threading.Event(), status="queued", title="", current="",
                    total=0, done=0, succeeded=0, track_percent=0, failed=[],
                    error=None, archive=None, finished=None)
@@ -332,7 +349,13 @@ def status(jid):
             return jsonify(error="Job not found or expired."), 404
         fields = ("id", "status", "title", "current", "total", "done", "succeeded",
                   "track_percent", "failed", "error")
-        return jsonify({key: job[key] for key in fields})
+        result = {key: job[key] for key in fields}
+        tagged = job.get("tagged", [])
+        result["metadata"] = job.get("metadata", True)
+        result["tagged_count"] = len(tagged)
+        result["official_art_count"] = sum(t.get("art_source") == "coverartarchive" for t in tagged)
+        result["thumbnail_art_count"] = sum(t.get("art_source") == "youtube" for t in tagged)
+        return jsonify(result)
 
 
 @app.delete("/api/jobs/<jid>")

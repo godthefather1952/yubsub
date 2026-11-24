@@ -2,6 +2,39 @@
 
 **YUBSUB by 2.wav** is a black-and-yellow branded YouTube / YouTube Music playlist-to-MP3 ZIP tool.
 
+## Auto-tag music and embed cover artwork
+
+The converter now enables **AUTO-TAG MUSIC + COVER ART** by default. You can
+uncheck it to keep the previous yt-dlp/FFmpeg-only conversion behavior.
+Every successful MP3 is tagged **before** it is added to the ZIP.
+
+- Start with track/artist/album/release-year fields supplied by YouTube Music,
+  if present. A video upload date is **not** treated as the song's release year.
+- When a usable artist and title are known, ask the MusicBrainz recording
+  search API for a **strict artist-and-title match**. Albums and original years
+  are taken only from confident results; incorrect matches are discarded.
+- Prefer official release artwork from the Cover Art Archive. If not available,
+  try a YouTube thumbnail supplied by yt-dlp. Unavailable metadata/art never
+  causes a successful MP3 to be discarded.
+- Embed standard MP3 ID3 fields and APIC cover artwork using Mutagen.
+  Playlist track numbers are not mistakenly used as album track numbers.
+- Show how many completed tracks were tagged and how many had official artwork
+  versus thumbnails in the completion status.
+
+**Limitations:** Not every upload can be identified. Bootlegs, covers, remixes,
+live recordings, ambiguous artist names, and songs missing from MusicBrainz
+may have only YouTube metadata or no artwork. MusicBrainz asks for at most
+one request per second, so matching adds time for larger playlists. Artwork
+is often community-maintained rather than label-verified. The present YUBSUB
+backend generates **MP3 ZIPs** (not FLAC or M4A downloads); the feature does not
+change audio quality or download restrictions. The UI doesn't yet support
+manually editing individual track metadata before conversion.
+
+Run offline tests with `python -m pip install -r requirements.txt pytest`
+and `python -m pytest -q`. For a real smoke test, download a small playlist
+you have permission to use and inspect the MP3s' tags and cover art in your
+music player.
+
 ## Website: GitHub Pages at yubsub.godthefather1952.com
 
 The **webpage lives on GitHub Pages**. Python, yt-dlp, Deno, and FFmpeg still run in a small separate server because GitHub Pages only hosts static files.
