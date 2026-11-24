@@ -274,8 +274,10 @@ def tag_mp3(path, entry=None, detail=None):
         ("TRCK", TRCK, tags_data["track_number"]),
     )
     for frame_name, factory, value in values:
+        # yt-dlp's FFmpegMetadata may have set upload date as TDRC, or a
+        # channel name as album/artist. Clear those before writing trusted data.
+        tags.delall(frame_name)
         if value:
-            tags.delall(frame_name)
             tags.add(factory(encoding=3, text=[str(value)]))
     if tags_data["album"] and tags_data["artist"]:
         tags.delall("TPE2")
