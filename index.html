@@ -63,6 +63,11 @@
     .quality-option small{font-size:9px;color:#9d9e9b;font-weight:700;letter-spacing:.08em}
     .quality-option input:checked+span{background:#fbe05216;border-color:var(--yellow);color:var(--yellow)}
     .quality-option input:focus-visible+span{outline:2px solid white;outline-offset:3px}
+    .meta-option{display:flex;gap:12px;align-items:center;margin-top:17px;padding:13px 14px;border:1px solid #44463c;border-radius:11px;background:#fbe0520a;cursor:pointer}
+    .meta-option input{accent-color:var(--yellow);width:19px;height:19px;flex-shrink:0}
+    .meta-option span{display:flex;flex-direction:column;gap:4px}
+    .meta-option b{font-size:11px;letter-spacing:.055em;color:#efeee3}
+    .meta-option small{font-size:10px;color:#b1b2a4;line-height:1.45}
     .note{color:#91918e;font-size:11px;line-height:1.5;margin:10px 0 0}
     .submit{width:100%;display:flex;align-items:center;justify-content:space-between;gap:14px;background:var(--yellow);color:#151515;border:0;border-radius:12px;font-size:14px;font-weight:950;padding:18px 20px;margin-top:29px;transition:transform .15s,filter .15s}
     .submit:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.06)}
@@ -133,6 +138,7 @@
                 <label class="quality-option"><input type="radio" name="quality" value="256"><span><b>256</b><small>KBPS</small></span></label>
                 <label class="quality-option"><input type="radio" name="quality" value="320"><span><b>320</b><small>KBPS</small></span></label>
               </div>
+              <label class="meta-option" for="metadata"><input id="metadata" type="checkbox" checked><span><b>AUTO-TAG MUSIC + COVER ART</b><small>Artist, song, album and original release year when verified. Official cover art when available; YouTube thumbnail as fallback.</small></span></label>
               <p class="note" id="urlhelp">Higher bitrates make larger files, but cannot improve the source audio.</p>
             </div>
             <button type="submit" class="submit" id="go"><span id="gotext">BUILD MY MP3 ZIP</span><span class="arr" aria-hidden="true">↗</span></button>
@@ -196,7 +202,7 @@
           else if(s.status==="zipping") { el("stage").textContent="Packaging your ZIP"; meter(97); }
           else if(s.status==="complete") {
             el("stage").textContent="Your ZIP is ready";
-            el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.title?" · "+s.title:"");
+            el("current").textContent=s.succeeded+" MP3"+(s.succeeded===1?"":"s")+" converted"+(s.metadata?" · "+s.tagged_count+" tagged · "+s.official_art_count+" official covers"+(s.thumbnail_art_count?" · "+s.thumbnail_art_count+" thumbnails":""):"")+(s.title?" · "+s.title:"");
             meter(100);
             el("download").href=apiUrl("/api/jobs/"+encodeURIComponent(jobId)+"/download");
             el("download").hidden=false;el("system").textContent="COMPLETE";safeStore(null);end();return;
@@ -220,7 +226,7 @@
         clearTimeout(pollTimer);jobId=null;retries=0;startUI();
         const checked=document.querySelector('input[name="quality"]:checked');
         try{
-          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:el("url").value.trim(),quality:checked?checked.value:"192"})});
+          const job=await api("/api/jobs",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:el("url").value.trim(),quality:checked?checked.value:"192",metadata:el("metadata").checked})});
           jobId=job.id;safeStore(jobId);await poll();
         }catch(e){error(e.message);el("system").textContent="READY TO RUN";end();}
       });
