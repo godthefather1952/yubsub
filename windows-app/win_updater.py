@@ -200,3 +200,26 @@ def check_for_updates(interactive=True):
         return {"ok": True, "update_available": True, "installer_started": True}
     except Exception:
         return {"ok": False, "error": "Could not verify a Windows update. Try again later."}
+
+
+def maybe_check_daily():
+    """Sparkle-like daily startup check; never installs without confirmation."""
+    if not updater_available():
+        return
+    try:
+        local = os.environ.get("LOCALAPPDATA")
+        if not local:
+            return
+        stamp = Path(local) / "YUBSUB" / "last-update-check.txt"
+        stamp.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            last_check = float(stamp.read_text(encoding="ascii"))
+        except (OSError, ValueError):
+            last_check = 0.0
+        now = time.time()
+        if 0 <= now - last_check < 86400:
+            return
+        stamp.write_text(str(now), encoding="ascii")
+        check_for_updates(interactive=True)
+    except (OSError, ValueError):
+        return
