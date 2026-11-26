@@ -220,6 +220,8 @@ def maybe_check_daily():
         if 0 <= now - last_check < 86400:
             return
         stamp.write_text(str(now), encoding="ascii")
-        check_for_updates(interactive=True)
+        result = check_for_updates(interactive=False)
+        if result.get("update_available"):
+            check_for_updates(interactive=True)
     except (OSError, ValueError):
         return
