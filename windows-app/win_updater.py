@@ -28,7 +28,7 @@ MAX_INSTALLER_SIZE = 500 * 1024 * 1024
 
 
 def resources_dir():
-    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 
 
 def installed_version():
