@@ -1,0 +1,138 @@
+name: Build YUBSUB for Windows
+
+on:
+  pull_request:
+    paths:
+      - "win_app.py"
+      - "app.py"
+      - "music_metadata.py"
+      - "requirements.txt"
+      - "static/**"
+      - "windows-app/**"
+      - "tests/**"
+      - ".github/workflows/windows-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "win_app.py"
+      - "app.py"
+      - "music_metadata.py"
+      - "requirements.txt"
+      - "static/**"
+      - "windows-app/**"
+      - "tests/**"
+      - ".github/workflows/windows-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Windows x64 portable and installer
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Validate Python and shared downloader behavior
+        shell: pwsh
+        run: |
+          python -m pip install -r requirements.txt pytest
+          if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed" }
+          python -m py_compile app.py win_app.py windows-app/win_updater.py windows-app/sign_release.py windows-app/make_icon.py
+          if ($LASTEXITCODE -ne 0) { throw "Python syntax failed" }
+          python -m pytest -q
+          if ($LASTEXITCODE -ne 0) { throw "Tests failed" }
+
+      - name: Bundle YUBSUB and runtime dependencies
+        shell: pwsh
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        run: ./windows-app/build_windows.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup installation failed" }
+
+      - name: Package self-contained portable EXE and Windows installer
+        shell: pwsh
+        run: |
+          $version = (Get-Content "windows-app/VERSION" -Raw).Trim()
+          $paths = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "C:\ProgramData\chocolatey\bin\iscc.exe"
+          )
+          $iscc = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found" }
+          & $iscc "/DAppVersion=$version" "windows-app/installer.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed" }
+          $setup = "dist/installer/YUBSUB-Setup-v$version.exe"
+          if (-not (Test-Path $setup)) { throw "Installer .exe missing" }
+          $portable = "dist/YUBSUB-Windows-x64-Portable-v$version.zip"
+          Compress-Archive -Path "dist/YUBSUB" -DestinationPath $portable -Force
+          if (-not (Test-Path $portable)) { throw "Portable ZIP missing" }
+          Get-FileHash $setup -Algorithm SHA256
+          Get-FileHash $portable -Algorithm SHA256
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item $setup release/
+          Copy-Item $portable release/
+
+      - name: Upload Windows executable and installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: YUBSUB-Windows-x64
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish signed Windows release
+    needs: [build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/download-artifact@v4
+        with:
+          name: YUBSUB-Windows-x64
+          path: release
+
+      - name: Verify release credentials and sign Windows update manifest
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_PRIVATE_KEY" || -z "$SPARKLE_PUBLIC_ED_KEY" ]]; then
+            echo "::error::Signed Windows releases require the existing owner Sparkle keypair."
+            exit 1
+          fi
+          python -m pip install 'cryptography>=44,<49'
+          version="$(tr -d '[:space:]' < windows-app/VERSION)"
+          python windows-app/sign_release.py release "$version"
+
+      - name: Publish Windows assets without changing the macOS latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < windows-app/VERSION)"
+          tag="windows-v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::error::Windows release tag $tag already exists. Increment windows-app/VERSION for a new release."
+            exit 1
+          fi
+          gh release create "$tag"             "release/YUBSUB-Setup-v$version.exe"             "release/YUBSUB-Windows-x64-Portable-v$version.zip"             release/windows-update.json             release/windows-update.sig             release/SHA256SUMS-windows.txt             --target "$GITHUB_SHA"             --title "YUBSUB Desktop v$version — Windows x64"             --latest=false             --notes "Windows x64 desktop release: local single/playlist conversion, MP3/FLAC, optional metadata and cover art, native save/paste, signed update checks. Installer provides Start Menu and uninstall support. Windows may display a SmartScreen warning until code signing is configured."
