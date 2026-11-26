@@ -218,6 +218,7 @@ def test_single_video_converts_to_direct_mp3(monkeypatch):
         assert not list(folder.glob("*.zip"))
         with mod.LOCK:
             mod.JOBS[job["id"]] = job
+        response = None
         try:
             response = mod.app.test_client().get("/api/jobs/single-test/download")
             assert response.status_code == 200
@@ -225,6 +226,8 @@ def test_single_video_converts_to_direct_mp3(monkeypatch):
             assert response.mimetype == "audio/mpeg"
             assert "Sample Video.mp3" in response.headers["Content-Disposition"]
         finally:
+            if response is not None:
+                response.close()
             with mod.LOCK:
                 mod.JOBS.pop(job["id"], None)
 
@@ -308,6 +311,7 @@ def test_flac_single_and_playlist_conversion(monkeypatch):
             assert job["status"] == "complete", job["error"]
             with mod.LOCK:
                 mod.JOBS[jid] = job
+            response = None
             try:
                 response = client.get("/api/jobs/" + jid + "/download")
                 assert response.status_code == 200
@@ -322,6 +326,8 @@ def test_flac_single_and_playlist_conversion(monkeypatch):
                         assert archive.namelist() == [
                             "001 - My song.flac", "002 - Another song.flac"]
             finally:
+                if response is not None:
+                    response.close()
                 with mod.LOCK:
                     mod.JOBS.pop(jid, None)
 
