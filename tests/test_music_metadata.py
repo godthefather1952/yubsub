@@ -98,3 +98,39 @@ def test_fallback_without_provider(monkeypatch, tmp_path):
     assert not tags.getall("TALB")
     assert not tags.getall("TDRC")
     assert result["match"] == "youtube"
+
+
+def test_flac_native_tags_and_embedded_art(monkeypatch):
+    """Exercise FLAC's Vorbis comments/Picture without downloading audio."""
+    import mutagen.flac
+    class FakeFLAC(dict):
+        def __init__(self):
+            super().__init__()
+            self.pictures = []
+            self.saved = False
+        def clear_pictures(self):
+            self.pictures.clear()
+        def add_picture(self, picture):
+            self.pictures.append(picture)
+        def save(self):
+            self.saved = True
+    tags = FakeFLAC()
+    monkeypatch.setattr(mutagen.flac, "FLAC", lambda _: tags)
+    monkeypatch.setattr(mm, "_musicbrainz_match", lambda *_: {
+        "title": "Example Song", "artist": "Example Artist",
+        "album": "Example Album", "year": "2022", "release_ids": ["id"],
+    })
+    monkeypatch.setattr(mm, "_cover_art", lambda *_: (
+        ("image/jpeg", b"\\xff\\xd8\\xff" + b"testimage"), "coverartarchive",
+    ))
+    result = mm.tag_audio("unused.flac", "flac", {
+        "title": "Example Artist - Example Song",
+    })
+    assert tags["title"] == ["Example Song"]
+    assert tags["artist"] == ["Example Artist"]
+    assert tags["album"] == ["Example Album"]
+    assert tags["date"] == ["2022"]
+    assert len(tags.pictures) == 1
+    assert tags.pictures[0].mime == "image/jpeg"
+    assert tags.saved is True
+    assert result["art_source"] == "coverartarchive"
