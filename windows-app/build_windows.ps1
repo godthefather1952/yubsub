@@ -26,7 +26,12 @@ $denoName = "deno-x86_64-pc-windows-msvc.zip"
 $denoUrl = "https://github.com/denoland/deno/releases/download/v$denoVersion/$denoName"
 Invoke-WebRequest -Uri $denoUrl -OutFile "build/$denoName"
 Invoke-WebRequest -Uri "$denoUrl.sha256sum" -OutFile "build/$denoName.sha256sum"
-$expected = ((Get-Content "build/$denoName.sha256sum" -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+# Deno's Windows checksum file uses PowerShell Get-FileHash output
+# ("Hash : ..."); macOS/Linux checksums use GNU "<hash> <filename>".
+$checksumText = Get-Content "build/$denoName.sha256sum" -Raw
+$hashMatches = [regex]::Matches($checksumText, '(?<![0-9A-Fa-f])[0-9A-Fa-f]{64}(?![0-9A-Fa-f])')
+if ($hashMatches.Count -ne 1) { throw "Unrecognized Deno checksum format" }
+$expected = $hashMatches[0].Value.ToLowerInvariant()
 $actual = (Get-FileHash "build/$denoName" -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($expected -notmatch '^[0-9a-f]{64}$' -or $actual -ne $expected) {
   throw "Deno checksum did not match upstream"
