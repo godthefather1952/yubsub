@@ -174,8 +174,19 @@ def launch():
             width=1120, height=820, min_size=(600, 480),
             background_color="#121212", js_api=DesktopAPI(),
         )
+        # A passive daily check mirrors the Mac updater. It prompts before
+        # downloading or launching an installer and skips active conversions.
+        def after_window_starts():
+            import time
+            time.sleep(12)
+            with backend.LOCK:
+                busy = any(j["status"] not in backend.FINAL for j in backend.JOBS.values())
+            if not busy:
+                from win_updater import maybe_check_daily
+                maybe_check_daily()
+
         # Native Edge WebView2 (Chromium), using per-user application storage.
-        webview.start(gui="edgechromium", debug=False)
+        webview.start(after_window_starts, gui="edgechromium", debug=False)
     finally:
         server.shutdown()
         server.server_close()
