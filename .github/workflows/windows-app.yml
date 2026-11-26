@@ -41,7 +41,7 @@ jobs:
       - name: Validate Python and shared downloader behavior
         shell: pwsh
         run: |
-          python -m pip install -r requirements.txt pytest
+          python -m pip install -r requirements.txt pytest "cryptography>=44,<49"
           if ($LASTEXITCODE -ne 0) { throw "Dependency installation failed" }
           python -m py_compile app.py win_app.py windows-app/win_updater.py windows-app/sign_release.py windows-app/make_icon.py
           if ($LASTEXITCODE -ne 0) { throw "Python syntax failed" }
