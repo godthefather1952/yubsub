@@ -3,6 +3,7 @@
 #endif
 
 [Setup]
+SourceDir=..
 AppId={{C27D48CF-B8ED-4A0C-ADAF-30623ACD25AF}
 AppName=YUBSUB
 AppVersion={#AppVersion}
