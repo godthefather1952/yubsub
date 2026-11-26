@@ -1,3 +1,4 @@
 flask>=3.0,<4
 yt-dlp[default]
 gunicorn>=22,<25
+mutagen>=1.47,<2
