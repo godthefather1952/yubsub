@@ -1,5 +1,16 @@
 # YUBSUB — Playlist in. MP3s out.
 
+## YUBSUB desktop app — Windows
+
+A Windows x64 desktop build is developed in [windows-app/](windows-app/README.md)
+using the existing Flask downloader and the same interface as the Mac app.
+It produces a portable `YUBSUB.exe` package and an Inno Setup installer.
+The Windows variant supports single videos, playlists, MP3, FLAC, native
+clipboard Paste and Save As, and optional metadata/cover artwork. The official
+Windows release uses a distinct `windows-vX.Y.Z` tag and does not replace
+the macOS Sparkle update feed. Until CI produces a release, use the Windows
+workflow's build artifacts for testing rather than calling it a published app.
+
 ## YUBSUB desktop app — macOS
 
 **[Download the official YUBSUB.app](https://github.com/godthefather1952/yubsub/releases/tag/mac-app-v0.4.3)** — choose Intel or Apple Silicon, unzip, and move YUBSUB.app into Applications. It bundles Python, yt-dlp, Deno, FFmpeg/FFprobe and an app window, so the end user **does not install requirements.txt, Python or Homebrew**.
