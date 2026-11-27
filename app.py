@@ -43,7 +43,10 @@ MAX_TOTAL = max(10, int(os.getenv("MAX_ARCHIVE_MB", "400"))) * 1024**2
 MAX_TRACK = max(5, int(os.getenv("MAX_TRACK_MB", "60"))) * 1024**2
 # FLAC encodes uncompressed PCM losslessly and is much larger than MP3.
 MAX_FLAC_TRACK = max(5, int(os.getenv("MAX_FLAC_TRACK_MB", "250"))) * 1024**2
-AUDIO_FORMATS = {"mp3", "flac"}
+# Uncompressed PCM WAV is substantially larger than the YouTube source.
+# A local desktop defaults to 1200 MB total, the hosted service to 400 MB.
+MAX_WAV_TRACK = max(5, int(os.getenv("MAX_WAV_TRACK_MB", "350"))) * 1024**2
+AUDIO_FORMATS = {"mp3", "flac", "wav"}
 COOKIE_FILE = Path(os.getenv("YT_COOKIES", str(ROOT / "cookies.txt")))
 JOBS = {}
 LOCK = threading.RLock()
@@ -188,7 +191,7 @@ def run_job(job):
         audio_format = job.get("format", "mp3")
         if audio_format not in AUDIO_FORMATS:
             raise ValueError("Unsupported audio format.")
-        max_track = MAX_FLAC_TRACK if audio_format == "flac" else MAX_TRACK
+        max_track = {"mp3": MAX_TRACK, "flac": MAX_FLAC_TRACK, "wav": MAX_WAV_TRACK}[audio_format]
         update(job, status="reading")
         if mode == "single":
             with yt_dlp.YoutubeDL(yt_options(skip_download=True, noplaylist=True,
@@ -315,7 +318,7 @@ def run_job(job):
             update(job, status="complete", archive=str(ready[0]), finished=time.time(),
                    current="", track_percent=100)
             return
-        update(job, status="zipping", current="Packaging MP3 files")
+        update(job, status="zipping", current="Packaging " + audio_format.upper() + " files")
         zip_path = folder / (title + ".zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as bundle:
             for file in ready:
@@ -380,7 +383,7 @@ def start():
         return jsonify(error=message), 400
     audio_format = data.get("format", "mp3")
     if not isinstance(audio_format, str) or audio_format not in AUDIO_FORMATS:
-        return jsonify(error="Choose MP3 or FLAC output format."), 400
+        return jsonify(error="Choose MP3, FLAC or WAV output format."), 400
     if not isinstance(data.get("metadata", True), bool):
         return jsonify(error="Invalid metadata setting."), 400
     quality = str(data.get("quality", "192"))
@@ -443,7 +446,7 @@ def download(jid):
     if audio_format not in AUDIO_FORMATS:
         return jsonify(error="Unsupported audio format."), 400
     extension = ("." + audio_format) if mode == "single" else ".zip"
-    mimetype = ({"mp3": "audio/mpeg", "flac": "audio/flac"}[audio_format]
+    mimetype = ({"mp3": "audio/mpeg", "flac": "audio/flac", "wav": "audio/wav"}[audio_format]
                 if mode == "single" else "application/zip")
     return send_file(path, as_attachment=True, download_name=safe_name(title) + extension,
                      mimetype=mimetype, max_age=0)
