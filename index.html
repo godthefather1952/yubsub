@@ -291,6 +291,24 @@
       // Native Mac/Windows use their existing signed desktop updater.
       // ChromeOS Linux serves signed .deb updates from its local converter.
       let chromeosDesktop = null;
+      let chromeosUpdateVersion = null;
+      async function checkChromeOSDaily() {
+        if(!chromeosDesktop?.updates)return;
+        const key="yubsub-chromeos-last-update-check";
+        let last=0;
+        try {last=Number(localStorage.getItem(key)||0);} catch {}
+        if(last>0 && Date.now()-last<24*60*60*1000)return;
+        try {
+          const result=await api("/api/chromeos/update/check");
+          if(!result.ok)return;
+          try {localStorage.setItem(key,String(Date.now()));} catch {}
+          if(result.update_available){
+            chromeosUpdateVersion=result.version;
+            el("updates").textContent="UPDATE AVAILABLE · "+result.version;
+            el("updates").hidden=false;
+          }
+        } catch {}
+      }
       window.addEventListener("pywebviewready",async()=>{
         try {
           if(await window.pywebview.api.available()) el("updates").hidden=false;
@@ -302,7 +320,10 @@
           .then(info=>{
             if(info?.platform==="chromeos-linux"){
               chromeosDesktop=info;
-              if(info.updates)el("updates").hidden=false;
+              if(info.updates){
+                el("updates").hidden=false;
+                checkChromeOSDaily();
+              }
             }
           }).catch(()=>{});
       }
@@ -314,9 +335,11 @@
             const status=await api("/api/chromeos/update/check");
             if(!status.ok)throw Error(status.error||"Update check failed.");
             if(!status.update_available){
+              chromeosUpdateVersion=null;
               alert("YUBSUB "+chromeosDesktop.version+" is up to date.");
               return;
             }
+            chromeosUpdateVersion=status.version;
             if(!confirm("YUBSUB "+status.version+" is available for ChromeOS. Download the signature-verified .deb installer?"))return;
             el("updates").disabled=true;
             el("updates").textContent="VERIFYING UPDATE…";
@@ -334,10 +357,10 @@
           const result=await window.pywebview.api.check();
           if(!result.ok)error(result.error||"Update check could not start.");
         } catch(e){error("Unable to check for updates: "+e.message);}
-        finally {el("updates").disabled=false;el("updates").textContent="CHECK FOR UPDATES";}
+        finally {el("updates").disabled=false;el("updates").textContent=chromeosUpdateVersion?"UPDATE AVAILABLE · "+chromeosUpdateVersion:"CHECK FOR UPDATES";}
       });
       // WKWebView treats audio files as playable media and may navigate to them
-      // instead of downloading. A native Save As dialog writes MP3/FLAC to disk.
+      // instead of downloading. A native Save As dialog writes MP3/FLAC/WAV to disk.
       // Plain web-browser users retain the existing attachment URL behavior.
       el("download").addEventListener("click",async event=>{
         if(jobMode!=="single"||!window.pywebview)return;
