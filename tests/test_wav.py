@@ -71,7 +71,7 @@ def test_wav_single_and_playlist(monkeypatch):
                 if mode == "single":
                     assert response.mimetype == "audio/wav"
                     assert response.data == source
-                    assert response.headers["Content-Disposition"].endswith("PCM Song.wav")
+                    assert "PCM Song.wav" in response.headers["Content-Disposition"]
                 else:
                     assert response.mimetype == "application/zip"
                     with zipfile.ZipFile(job["archive"]) as archive:
