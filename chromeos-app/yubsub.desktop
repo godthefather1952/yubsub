@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=YUBSUB
+GenericName=Audio Downloader
+Comment=Convert permitted YouTube videos and playlists locally to MP3 or FLAC
+Exec=/opt/yubsub/yubsub
+Icon=yubsub
+Terminal=false
+Categories=AudioVideo;Audio;Utility;
+StartupNotify=false

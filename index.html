@@ -283,18 +283,53 @@
       }
       // Only the native macOS app exposes this bridge. The GitHub Pages
       // converter never displays a nonfunctional update button.
+      // Native Mac/Windows use their existing signed desktop updater.
+      // ChromeOS Linux serves signed .deb updates from its local converter.
+      let chromeosDesktop = null;
       window.addEventListener("pywebviewready",async()=>{
         try {
           if(await window.pywebview.api.available()) el("updates").hidden=false;
         } catch {}
       });
+      if(LOCAL){
+        fetch("/api/chromeos/version",{cache:"no-store"})
+          .then(response=>response.ok?response.json():null)
+          .then(info=>{
+            if(info?.platform==="chromeos-linux"){
+              chromeosDesktop=info;
+              if(info.updates)el("updates").hidden=false;
+            }
+          }).catch(()=>{});
+      }
       el("updates").addEventListener("click",async()=>{
         if(busy){error("Finish or cancel the current conversion before updating.");return;}
         clearError();
         try {
+          if(chromeosDesktop){
+            const status=await api("/api/chromeos/update/check");
+            if(!status.ok)throw Error(status.error||"Update check failed.");
+            if(!status.update_available){
+              alert("YUBSUB "+chromeosDesktop.version+" is up to date.");
+              return;
+            }
+            if(!confirm("YUBSUB "+status.version+" is available for ChromeOS. Download the signature-verified .deb installer?"))return;
+            el("updates").disabled=true;
+            el("updates").textContent="VERIFYING UPDATE…";
+            const ready=await api("/api/chromeos/update/prepare",{method:"POST"});
+            if(!ready.ok)throw Error(ready.error||"Could not verify the update.");
+            const link=document.createElement("a");
+            link.href=ready.download;
+            link.download=ready.filename;
+            document.body.append(link);
+            link.click();
+            link.remove();
+            alert("Verified update downloading. Open the downloaded .deb in ChromeOS Files and choose Install. YUBSUB never installs packages without your permission.");
+            return;
+          }
           const result=await window.pywebview.api.check();
           if(!result.ok)error(result.error||"Update check could not start.");
         } catch(e){error("Unable to check for updates: "+e.message);}
+        finally {el("updates").disabled=false;el("updates").textContent="CHECK FOR UPDATES";}
       });
       // WKWebView treats audio files as playable media and may navigate to them
       // instead of downloading. A native Save As dialog writes MP3/FLAC to disk.
