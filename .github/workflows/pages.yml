@@ -59,6 +59,11 @@ jobs:
         with:
           path: _site
 
+      # GitHub Pages API can briefly lag artifact uploads; allow indexing
+      # before asking deploy-pages to resolve the single newly uploaded asset.
+      - name: Allow Pages artifact to register
+        run: sleep 15
+
       - name: Deploy GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
