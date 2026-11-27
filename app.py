@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
 from flask import Flask, jsonify, request, send_file
-from music_metadata import tag_mp3
+from music_metadata import tag_audio
 
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__)
@@ -41,6 +41,12 @@ MAX_TRACKS = max(1, min(200, int(os.getenv("MAX_TRACKS", "50"))))
 MAX_ACTIVE = max(1, int(os.getenv("MAX_ACTIVE_JOBS", "2")))
 MAX_TOTAL = max(10, int(os.getenv("MAX_ARCHIVE_MB", "400"))) * 1024**2
 MAX_TRACK = max(5, int(os.getenv("MAX_TRACK_MB", "60"))) * 1024**2
+# FLAC encodes uncompressed PCM losslessly and is much larger than MP3.
+MAX_FLAC_TRACK = max(5, int(os.getenv("MAX_FLAC_TRACK_MB", "250"))) * 1024**2
+# Uncompressed PCM WAV is substantially larger than the YouTube source.
+# A local desktop defaults to 1200 MB total, the hosted service to 400 MB.
+MAX_WAV_TRACK = max(5, int(os.getenv("MAX_WAV_TRACK_MB", "350"))) * 1024**2
+AUDIO_FORMATS = {"mp3", "flac", "wav"}
 COOKIE_FILE = Path(os.getenv("YT_COOKIES", str(ROOT / "cookies.txt")))
 JOBS = {}
 LOCK = threading.RLock()
@@ -60,6 +66,29 @@ def playlist_url(raw):
         if not re.fullmatch(r"[A-Za-z0-9_-]{10,128}", playlist_id):
             return None
         return "https://www.youtube.com/playlist?list=" + playlist_id
+    except (ValueError, AttributeError):
+        return None
+
+
+def video_url(raw):
+    """Accept a single YouTube video link and return a canonical watch URL."""
+    try:
+        u = urlsplit(raw.strip())
+        if u.scheme != "https" or u.username or u.password or u.port not in (None, 443):
+            return None
+        if u.hostname not in ("youtube.com", "www.youtube.com", "m.youtube.com",
+                              "music.youtube.com", "youtu.be", "www.youtu.be"):
+            return None
+        if u.hostname in ("youtu.be", "www.youtu.be"):
+            match = re.fullmatch(r"/([A-Za-z0-9_-]{11})/?", u.path)
+            video_id = match.group(1) if match else ""
+        elif u.path == "/watch":
+            video_id = (parse_qs(u.query).get("v") or [""])[0]
+        else:
+            match = re.fullmatch(r"/(?:shorts|live|embed)/([A-Za-z0-9_-]{11})/?", u.path)
+            video_id = match.group(1) if match else ""
+        return ("https://www.youtube.com/watch?v=" + video_id
+                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id) else None)
     except (ValueError, AttributeError):
         return None
 
@@ -158,17 +187,35 @@ def run_job(job):
             raise RuntimeError("FFmpeg is not installed.")
         if not (shutil.which("deno") or shutil.which("node")):
             raise RuntimeError("Deno 2.3+ (or Node 22+) is required for YouTube.")
+        mode = job.get("mode", "playlist")
+        audio_format = job.get("format", "mp3")
+        if audio_format not in AUDIO_FORMATS:
+            raise ValueError("Unsupported audio format.")
+        max_track = {"mp3": MAX_TRACK, "flac": MAX_FLAC_TRACK, "wav": MAX_WAV_TRACK}[audio_format]
         update(job, status="reading")
-        with yt_dlp.YoutubeDL(yt_options(extract_flat="in_playlist", skip_download=True,
-                                         ignoreerrors=True, playlistend=MAX_TRACKS)) as ydl:
-            info = ydl.extract_info(job["url"], download=False)
-        check_cancel(job)
-        if not info or not info.get("entries"):
-            raise RuntimeError("Playlist is empty, private or unavailable.")
-        entries = list(itertools.islice((e for e in info["entries"] if e), MAX_TRACKS))
-        if not entries:
-            raise RuntimeError("No accessible tracks found.")
-        title = safe_name(info.get("title"), "YouTube playlist")
+        if mode == "single":
+            with yt_dlp.YoutubeDL(yt_options(skip_download=True, noplaylist=True,
+                                             ignoreerrors=False)) as ydl:
+                info = ydl.extract_info(job["url"], download=False)
+            check_cancel(job)
+            if not info or info.get("entries"):
+                raise RuntimeError("Video is private or unavailable.")
+            video_id = str(info.get("id") or "")
+            if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                raise RuntimeError("Video is unavailable or has no valid ID.")
+            title = safe_name(info.get("title"), "YouTube video")
+            entries = [{"id": video_id, "title": title}]
+        else:
+            with yt_dlp.YoutubeDL(yt_options(extract_flat="in_playlist", skip_download=True,
+                                             ignoreerrors=True, playlistend=MAX_TRACKS)) as ydl:
+                info = ydl.extract_info(job["url"], download=False)
+            check_cancel(job)
+            if not info or not info.get("entries"):
+                raise RuntimeError("Playlist is empty, private or unavailable.")
+            entries = list(itertools.islice((e for e in info["entries"] if e), MAX_TRACKS))
+            if not entries:
+                raise RuntimeError("No accessible tracks found.")
+            title = safe_name(info.get("title"), "YouTube playlist")
         update(job, status="downloading", title=title, total=len(entries))
         ready = []
         total_bytes = 0
@@ -176,7 +223,7 @@ def run_job(job):
         for index, item in enumerate(entries, 1):
             check_cancel(job)
             track = safe_name(item.get("title"), "Track " + str(index))
-            label = "{:03d} - {}".format(index, track)
+            label = track if mode == "single" else "{:03d} - {}".format(index, track)
             update(job, done=index - 1, current=track, track_percent=0)
             video_id = str(item.get("id") or "")
             if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
@@ -198,11 +245,13 @@ def run_job(job):
                     if total:
                         update(job, track_percent=min(99, int(100 * info.get("downloaded_bytes", 0) / total)))
 
+            codec_options = {"key": "FFmpegExtractAudio", "preferredcodec": audio_format}
+            if audio_format == "mp3":
+                codec_options["preferredquality"] = job["quality"]
             opts = yt_options(format="bestaudio/best", noplaylist=True,
-                              outtmpl=template, max_filesize=MAX_TRACK,
+                              outtmpl=template, max_filesize=max_track,
                               progress_hooks=[progress], postprocessors=[
-                                  {"key": "FFmpegExtractAudio", "preferredcodec": "mp3",
-                                   "preferredquality": job["quality"]},
+                                  codec_options,
                                   {"key": "FFmpegMetadata"}])
             try:
                 try:
@@ -221,28 +270,27 @@ def run_job(job):
                     app.logger.info("Retrying %s with alternate YouTube clients", video_id)
                     result = download_video(video_id, alternate)
                 check_cancel(job)
-                mp3 = Path(prefix + ".mp3")
-                if result or not mp3.is_file():
-                    raise RuntimeError("No MP3 output was produced.")
+                audio = Path(prefix + "." + audio_format)
+                if result or not audio.is_file():
+                    raise RuntimeError("No " + audio_format.upper() + " output was produced.")
                 if job.get("metadata", True):
                     update(job, current="Tagging " + track)
                     try:
-                        tagged = tag_mp3(mp3, item, source_info)
+                        tagged = tag_audio(audio, audio_format, item, source_info)
                         with LOCK:
                             job.setdefault("tagged", []).append(tagged)
                     except Exception as tag_error:
-                        # A metadata provider outage must never discard a good MP3.
-                        app.logger.warning("Metadata unavailable for %s: %s", video_id, tag_error)
-                size = mp3.stat().st_size
-                if not size or size > MAX_TRACK:
-                    mp3.unlink(missing_ok=True)
+                        app.logger.warning("Could not tag %s: %s", video_id, tag_error)
+                size = audio.stat().st_size
+                if not size or size > max_track:
+                    audio.unlink(missing_ok=True)
                     raise RuntimeError("Track exceeded size limit.")
                 if total_bytes + size > MAX_TOTAL:
-                    mp3.unlink(missing_ok=True)
+                    audio.unlink(missing_ok=True)
                     with LOCK:
                         job["failed"].append(label + ": archive size limit reached")
                     break
-                ready.append(mp3)
+                ready.append(audio)
                 total_bytes += size
                 consecutive_player_errors = 0
                 update(job, succeeded=len(ready))
@@ -265,7 +313,12 @@ def run_job(job):
         if not ready:
             first = job["failed"][0] if job["failed"] else "Unknown"
             raise RuntimeError("No tracks could be converted. " + first)
-        update(job, status="zipping", current="Packaging MP3 files")
+        if mode == "single":
+            # Direct audio file: one downloadable MP3 or FLAC, no ZIP or numbering.
+            update(job, status="complete", archive=str(ready[0]), finished=time.time(),
+                   current="", track_percent=100)
+            return
+        update(job, status="zipping", current="Packaging " + audio_format.upper() + " files")
         zip_path = folder / (title + ".zip")
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_STORED, allowZip64=True) as bundle:
             for file in ready:
@@ -318,21 +371,30 @@ def health():
 def start():
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify(error="Submit a YouTube playlist URL."), 400
-    url = playlist_url(str(data.get("url", "")))
+        return jsonify(error="Submit a YouTube URL."), 400
+    mode = data.get("mode", "playlist")
+    if mode not in ("playlist", "single"):
+        return jsonify(error="Choose playlist or single video mode."), 400
+    url = (video_url if mode == "single" else playlist_url)(str(data.get("url", "")))
     if not url:
-        return jsonify(error="Enter a YouTube playlist link containing list=."), 400
-    quality = str(data.get("quality", "192"))
+        message = ("Enter a single YouTube video link."
+                   if mode == "single"
+                   else "Enter a YouTube playlist link containing list=.")
+        return jsonify(error=message), 400
+    audio_format = data.get("format", "mp3")
+    if not isinstance(audio_format, str) or audio_format not in AUDIO_FORMATS:
+        return jsonify(error="Choose MP3, FLAC or WAV output format."), 400
     if not isinstance(data.get("metadata", True), bool):
         return jsonify(error="Invalid metadata setting."), 400
-    if quality not in {"128", "192", "256", "320"}:
+    quality = str(data.get("quality", "192"))
+    if audio_format == "mp3" and quality not in {"128", "192", "256", "320"}:
         return jsonify(error="Invalid MP3 bitrate."), 400
     with LOCK:
         if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
             return jsonify(error="Converter is busy. Try again shortly."), 429
         jid = uuid.uuid4().hex
-        job = dict(id=jid, url=url, quality=quality, metadata=data.get("metadata", True),
-                   tagged=[], directory=tempfile.mkdtemp(prefix="yubsub_"),
+        job = dict(id=jid, mode=mode, format=audio_format, url=url, quality=quality,
+                   metadata=data.get("metadata", True), tagged=[], directory=tempfile.mkdtemp(prefix="yubsub_"),
                    stop=threading.Event(), status="queued", title="", current="",
                    total=0, done=0, succeeded=0, track_percent=0, failed=[],
                    error=None, archive=None, finished=None)
@@ -347,15 +409,16 @@ def status(jid):
         job = JOBS.get(jid)
         if not job:
             return jsonify(error="Job not found or expired."), 404
-        fields = ("id", "status", "title", "current", "total", "done", "succeeded",
+        fields = ("id", "mode", "status", "title", "current", "total", "done", "succeeded",
                   "track_percent", "failed", "error")
-        result = {key: job[key] for key in fields}
+        response = {key: job[key] for key in fields}
+        response["format"] = job.get("format", "mp3")
         tagged = job.get("tagged", [])
-        result["metadata"] = job.get("metadata", True)
-        result["tagged_count"] = len(tagged)
-        result["official_art_count"] = sum(t.get("art_source") == "coverartarchive" for t in tagged)
-        result["thumbnail_art_count"] = sum(t.get("art_source") == "youtube" for t in tagged)
-        return jsonify(result)
+        response["metadata"] = job.get("metadata", True)
+        response["tagged_count"] = len(tagged)
+        response["official_art_count"] = sum(t.get("art_source") == "coverartarchive" for t in tagged)
+        response["thumbnail_art_count"] = sum(t.get("art_source") == "youtube" for t in tagged)
+        return jsonify(response)
 
 
 @app.delete("/api/jobs/<jid>")
@@ -375,12 +438,18 @@ def download(jid):
     with LOCK:
         job = JOBS.get(jid)
         if not job or job["status"] != "complete":
-            return jsonify(error="ZIP is not ready or has expired."), 404
-        path, title = job["archive"], job["title"]
+            return jsonify(error="Download is not ready or has expired."), 404
+        path, title, mode = job["archive"], job["title"], job.get("mode", "playlist")
+        audio_format = job.get("format", "mp3")
     if not Path(path).is_file():
-        return jsonify(error="ZIP expired."), 410
-    return send_file(path, as_attachment=True, download_name=safe_name(title) + ".zip",
-                     mimetype="application/zip", max_age=0)
+        return jsonify(error="Download expired."), 410
+    if audio_format not in AUDIO_FORMATS:
+        return jsonify(error="Unsupported audio format."), 400
+    extension = ("." + audio_format) if mode == "single" else ".zip"
+    mimetype = ({"mp3": "audio/mpeg", "flac": "audio/flac", "wav": "audio/wav"}[audio_format]
+                if mode == "single" else "application/zip")
+    return send_file(path, as_attachment=True, download_name=safe_name(title) + extension,
+                     mimetype=mimetype, max_age=0)
 
 
 if __name__ == "__main__":
