@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import yt_dlp
 from flask import Flask, jsonify, request, send_file
+from music_metadata import tag_audio
 
 ROOT = Path(__file__).resolve().parent
 app = Flask(__name__)
@@ -230,8 +231,12 @@ def run_job(job):
             prefix = str(folder / label)
             template = prefix.replace("%", "%%") + ".%(ext)s"
 
+            source_info = {}
+
             def progress(info):
                 check_cancel(job)
+                if isinstance(info.get("info_dict"), dict):
+                    source_info.update(info["info_dict"])
                 if info.get("status") == "downloading":
                     total = info.get("total_bytes") or info.get("total_bytes_estimate")
                     if total:
@@ -265,6 +270,14 @@ def run_job(job):
                 audio = Path(prefix + "." + audio_format)
                 if result or not audio.is_file():
                     raise RuntimeError("No " + audio_format.upper() + " output was produced.")
+                if job.get("metadata", True):
+                    update(job, current="Tagging " + track)
+                    try:
+                        tagged = tag_audio(audio, audio_format, item, source_info)
+                        with LOCK:
+                            job.setdefault("tagged", []).append(tagged)
+                    except Exception as tag_error:
+                        app.logger.warning("Could not tag %s: %s", video_id, tag_error)
                 size = audio.stat().st_size
                 if not size or size > max_track:
                     audio.unlink(missing_ok=True)
@@ -368,6 +381,8 @@ def start():
     audio_format = data.get("format", "mp3")
     if not isinstance(audio_format, str) or audio_format not in AUDIO_FORMATS:
         return jsonify(error="Choose MP3 or FLAC output format."), 400
+    if not isinstance(data.get("metadata", True), bool):
+        return jsonify(error="Invalid metadata setting."), 400
     quality = str(data.get("quality", "192"))
     if audio_format == "mp3" and quality not in {"128", "192", "256", "320"}:
         return jsonify(error="Invalid MP3 bitrate."), 400
@@ -375,7 +390,8 @@ def start():
         if sum(j["status"] not in FINAL for j in JOBS.values()) >= MAX_ACTIVE:
             return jsonify(error="Converter is busy. Try again shortly."), 429
         jid = uuid.uuid4().hex
-        job = dict(id=jid, mode=mode, format=audio_format, url=url, quality=quality, directory=tempfile.mkdtemp(prefix="yubsub_"),
+        job = dict(id=jid, mode=mode, format=audio_format, url=url, quality=quality,
+                   metadata=data.get("metadata", True), tagged=[], directory=tempfile.mkdtemp(prefix="yubsub_"),
                    stop=threading.Event(), status="queued", title="", current="",
                    total=0, done=0, succeeded=0, track_percent=0, failed=[],
                    error=None, archive=None, finished=None)
@@ -394,6 +410,11 @@ def status(jid):
                   "track_percent", "failed", "error")
         response = {key: job[key] for key in fields}
         response["format"] = job.get("format", "mp3")
+        tagged = job.get("tagged", [])
+        response["metadata"] = job.get("metadata", True)
+        response["tagged_count"] = len(tagged)
+        response["official_art_count"] = sum(t.get("art_source") == "coverartarchive" for t in tagged)
+        response["thumbnail_art_count"] = sum(t.get("art_source") == "youtube" for t in tagged)
         return jsonify(response)
 
 
