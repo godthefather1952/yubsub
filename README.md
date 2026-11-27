@@ -1,5 +1,18 @@
 # YUBSUB — Playlist in. MP3s out.
 
+## YUBSUB desktop app — ChromeOS Linux
+
+The ChromeOS edition installs as a Debian Linux application on supported
+Chromebooks. It offers the shared local MP3/FLAC downloader, single/playlist
+conversion, metadata/artwork, browser-native clipboard and saving, and verified
+user-controlled updates. Builds use native amd64 and arm64 GitHub runners and
+produce two .deb packages. ChromeOS Linux support is required; the PWA and
+Chrome extension versions are not part of this implementation.
+
+See [ChromeOS installation and build documentation](chromeos-app/README.md).
+Official releases use separate chromeos-vX.Y.Z tags, so they do not disrupt
+the Mac Sparkle updater or Windows release channel.
+
 ## YUBSUB desktop app — Windows
 
 A Windows x64 desktop build is developed in [windows-app/](windows-app/README.md)
