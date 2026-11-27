@@ -241,7 +241,7 @@ def test_audio_formats_validate_and_default_to_mp3(monkeypatch):
     monkeypatch.setattr(mod, "MAX_ACTIVE", 99)
     client = mod.app.test_client()
     url = "https://youtu.be/abcdefghijk"
-    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "wav"}).status_code == 400
+    assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "ogg"}).status_code == 400
     assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": None}).status_code == 400
     assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "../flac"}).status_code == 400
     assert client.post("/api/jobs", json={"url": url, "mode": "single", "format": "mp3", "quality": "500"}).status_code == 400
@@ -250,6 +250,9 @@ def test_audio_formats_validate_and_default_to_mp3(monkeypatch):
         for payload, expected in (
             ({"url": url, "mode": "single"}, "mp3"),
             ({"url": url, "mode": "single", "format": "flac"}, "flac"),
+            ({"url": url, "mode": "single", "format": "wav"}, "wav"),
+            ({"url": "https://youtube.com/playlist?list=PL1234567890123",
+              "mode": "playlist", "format": "wav"}, "wav"),
             ({"url": "https://youtube.com/playlist?list=PL1234567890123",
               "mode": "playlist", "format": "flac"}, "flac"),
         ):
