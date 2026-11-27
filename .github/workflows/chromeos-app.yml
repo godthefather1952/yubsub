@@ -1,0 +1,146 @@
+name: Build YUBSUB for ChromeOS Linux
+
+on:
+  pull_request:
+    paths:
+      - "chromeos_app.py"
+      - "chromeos-app/**"
+      - "app.py"
+      - "music_metadata.py"
+      - "requirements.txt"
+      - "static/**"
+      - "tests/**"
+      - ".github/workflows/chromeos-app.yml"
+  push:
+    branches: [main]
+    paths:
+      - "chromeos_app.py"
+      - "chromeos-app/**"
+      - "app.py"
+      - "music_metadata.py"
+      - "requirements.txt"
+      - "static/**"
+      - "tests/**"
+      - ".github/workflows/chromeos-app.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ChromeOS Linux package (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-22.04
+          - arch: arm64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Debian packaging and audio dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg xdg-utils unzip curl ca-certificates
+          test "$(dpkg --print-architecture)" = "${{ matrix.arch }}"
+
+      - name: Test Python and UI source
+        run: |
+          python -m pip install -r requirements.txt pytest 'cryptography>=44,<49'
+          python -m py_compile chromeos_app.py chromeos-app/linux_updater.py chromeos-app/sign_release.py chromeos-app/make_icon.py
+          python -m pytest -q
+          python - <<'PY'
+          from pathlib import Path
+          assert Path("static/index.html").read_bytes() == Path("index.html").read_bytes()
+          assert b'/api/chromeos/update/check' in Path("static/index.html").read_bytes()
+          PY
+          bash -n chromeos-app/build_linux.sh
+
+      - name: Build Debian Linux YUBSUB package
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+        run: bash chromeos-app/build_linux.sh
+
+      - name: Inspect and test assembled .deb
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < chromeos-app/VERSION)"
+          deb="dist/chromeos/yubsub_${version}_${{ matrix.arch }}.deb"
+          test -f "$deb"
+          test "$(dpkg-deb --field "$deb" Architecture)" = "${{ matrix.arch }}"
+          test "$(dpkg-deb --field "$deb" Version)" = "$version"
+          test "$(dpkg-deb --field "$deb" Package)" = "yubsub"
+          dpkg-deb --contents "$deb" | grep '/usr/share/applications/yubsub.desktop'
+          dpkg-deb --contents "$deb" | grep '/usr/share/icons/hicolor/256x256/apps/yubsub.png'
+          sha256sum "$deb"
+
+      - name: Upload ChromeOS .deb for testing
+        uses: actions/upload-artifact@v4
+        with:
+          name: YUBSUB-ChromeOS-${{ matrix.arch }}
+          path: dist/chromeos/*.deb
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Publish authenticated ChromeOS Linux release
+    needs: [build]
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: YUBSUB-ChromeOS-*
+          path: release
+          merge-multiple: true
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require owner keys and sign both .deb packages
+        env:
+          SPARKLE_PUBLIC_ED_KEY: ${{ vars.SPARKLE_PUBLIC_ED_KEY }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_PUBLIC_ED_KEY" || -z "$SPARKLE_PRIVATE_KEY" ]]; then
+            echo "::error::The owner Ed25519 update keys are required to publish ChromeOS releases."
+            exit 1
+          fi
+          python -m pip install 'cryptography>=44,<49'
+          version="$(tr -d '[:space:]' < chromeos-app/VERSION)"
+          python chromeos-app/sign_release.py release "$version"
+
+      - name: Publish separate ChromeOS release without changing Mac latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < chromeos-app/VERSION)"
+          tag="chromeos-v$version"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::ChromeOS $tag is already published; bump VERSION for the next release."
+            exit 0
+          fi
+          gh release create "$tag" \
+            "release/yubsub_${version}_amd64.deb" \
+            "release/yubsub_${version}_arm64.deb" \
+            release/chromeos-update.json \
+            release/chromeos-update.sig \
+            release/SHA256SUMS-chromeos.txt \
+            --target "$GITHUB_SHA" \
+            --title "YUBSUB Desktop v$version — ChromeOS Linux" \
+            --latest=false \
+            --notes "ChromeOS Linux local download engine with MP3/FLAC, single/playlist conversion, artist/album/year metadata, embedded artwork, ChromeOS-native downloads, and verified user-installed .deb updates."
