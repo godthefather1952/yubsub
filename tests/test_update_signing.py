@@ -77,5 +77,5 @@ def test_macos_build_and_release_require_signed_updates():
     assert "appcast-Intel.xml" in workflow
     assert "appcast-Apple-Silicon.xml" in workflow
     version = (ROOT / "mac-app" / "VERSION").read_text().strip()
-    assert version == "0.4.3"
-    assert signing.version_build(version) == "403"
+    assert version == "0.5.1"
+    assert signing.version_build(version) == "501"
