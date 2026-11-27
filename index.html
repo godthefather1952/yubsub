@@ -59,6 +59,8 @@
     .paste{border:1px solid #545453;background:#26282b;color:#f3f1e6;border-radius:9px;font-size:11px;font-weight:850;padding:12px 15px;white-space:nowrap}
     .paste:hover{background:#373a3e}
     .mode-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-bottom:27px}
+    .audio-format-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .audio-format-grid .mode-option small{font-size:9px}
     .mode-option{display:block;cursor:pointer;position:relative}
     .mode-option input{position:absolute;opacity:0;pointer-events:none}
     .mode-option span{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:5px;min-height:66px;border:1px solid #414348;background:#111316;color:#e6e5df;border-radius:11px;transition:border-color .18s,background .18s,color .18s}
@@ -152,9 +154,10 @@
             <p class="note" id="modehint">Download multiple videos as one MP3 ZIP archive.</p>
             <div class="middle">
               <div class="field-head"><span class="mode-heading"><span class="num">03 /</span> AUDIO FORMAT</span><span class="field-help">Choose MP3 or FLAC</span></div>
-              <div class="mode-grid" role="radiogroup" aria-label="Audio output format">
+              <div class="mode-grid audio-format-grid" role="radiogroup" aria-label="Audio output format">
                 <label class="mode-option"><input type="radio" name="format" value="mp3" checked><span><b>MP3</b><small>SMALLER FILES</small></span></label>
-                <label class="mode-option"><input type="radio" name="format" value="flac"><span><b>FLAC</b><small>LARGER FILES</small></span></label>
+                <label class="mode-option"><input type="radio" name="format" value="flac"><span><b>FLAC</b><small>LOSSLESS FILE</small></span></label>
+                <label class="mode-option"><input type="radio" name="format" value="wav"><span><b>WAV</b><small>16-BIT PCM</small></span></label>
               </div>
               <p class="note" id="formathint">MP3 is best for everyday listening and sharing.</p>
             </div>
@@ -221,10 +224,12 @@
           : "Download multiple videos as " + fmt + " files inside one ZIP archive.";
         el("playlist-format-hint").textContent=fmt+" ZIP ARCHIVE";
         el("single-format-hint").textContent="ONE "+fmt+" FILE";
-        el("formathint").textContent = fmt==="FLAC"
+        el("formathint").textContent = fmt==="WAV"
+          ? "WAV exports uncompressed 16-bit PCM, retaining source sample rate. Files are large and cannot restore quality lost by YouTube compression."
+          : fmt==="FLAC"
           ? "FLAC files are larger. YouTube audio is compressed; converting to FLAC cannot restore lost detail."
           : "MP3 is best for everyday listening and sharing.";
-        el("quality-section").hidden = fmt==="FLAC";
+        el("quality-section").hidden = fmt!=="MP3";
         if (!busy) el("gotext").textContent = one ? "DOWNLOAD MY " + fmt : "BUILD MY " + fmt + " ZIP";
       };
       [...modeRadios,...formatRadios].forEach(input => input.addEventListener("change", () => { updateModeUI(); clearError(); }));
@@ -248,7 +253,7 @@
             const radio=modeRadios.find(input=>input.value===jobMode);
             if(radio && !radio.checked){radio.checked=true;updateModeUI();}
           }
-          if(s.format==="flac"||s.format==="mp3") {
+          if(["mp3","flac","wav"].includes(s.format)) {
             jobFormat=s.format;
             const radio=formatRadios.find(input=>input.value===jobFormat);
             if(radio && !radio.checked){radio.checked=true;updateModeUI();}
