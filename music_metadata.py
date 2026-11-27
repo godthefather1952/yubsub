@@ -1,4 +1,4 @@
-"""Best-effort, conservative MP3 metadata and cover-art enrichment for YUBSUB.
+"""Best-effort music metadata and cover-art enrichment for YUBSUB audio.
 
 Only trusted provider URLs are fetched. Failed lookups never make an audio
 download fail. A MusicBrainz recording must pass strict title/artist matching
@@ -340,10 +340,60 @@ def tag_flac(path, entry=None, detail=None):
     return tags_data
 
 
+def tag_wav(path, entry=None, detail=None):
+    """Add best-effort RIFF ID3 metadata to PCM WAV without re-encoding audio.
+
+    Some WAV players ignore ID3 chunks or embedded cover art. The WAV remains
+    playable even when a consumer does not display its metadata.
+    """
+    from mutagen.wave import WAVE
+
+    path = Path(path)
+    detail = detail or {}
+    tags_data = identify_source(entry, detail)
+    matched = _musicbrainz_match(tags_data["title"], tags_data["artist"])
+    if matched:
+        tags_data.update({key: matched[key] for key in ("title", "artist", "album", "year")
+                          if matched.get(key)})
+        tags_data["match"] = "musicbrainz"
+
+    audio = WAVE(path)
+    if audio.tags is None:
+        audio.add_tags()
+    tags = audio.tags
+    for key, kind, value in (
+        ("TIT2", TIT2, tags_data["title"]),
+        ("TPE1", TPE1, tags_data["artist"]),
+        ("TALB", TALB, tags_data["album"]),
+        ("TDRC", TDRC, tags_data["year"]),
+        ("TCON", TCON, tags_data["genre"]),
+        ("TRCK", TRCK, tags_data["track_number"]),
+    ):
+        tags.delall(key)
+        if value:
+            tags.add(kind(encoding=3, text=[str(value)]))
+    tags.delall("TPE2")
+    if tags_data["artist"] and tags_data["album"]:
+        tags.add(TPE2(encoding=3, text=[tags_data["artist"]]))
+
+    image, art_source = _cover_art(matched.get("release_ids", [])) if matched else (None, None)
+    if not image:
+        image, art_source = _youtube_art(detail)
+    tags.delall("APIC")
+    if image:
+        mime, content = image
+        tags.add(APIC(encoding=3, mime=mime, type=3, desc="Cover", data=content))
+    audio.save()
+    tags_data["art_source"] = art_source
+    return tags_data
+
+
 def tag_audio(path, audio_format, entry=None, detail=None):
     """Best-effort type-dispatched tag writer for existing audio files."""
     if audio_format == "mp3":
         return tag_mp3(path, entry, detail)
     if audio_format == "flac":
         return tag_flac(path, entry, detail)
+    if audio_format == "wav":
+        return tag_wav(path, entry, detail)
     raise ValueError("Unsupported audio format for tagging")

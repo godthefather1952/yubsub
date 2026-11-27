@@ -8,7 +8,7 @@ At GitHub build time, `pip install -r requirements.txt` installs Flask, yt-dlp a
 
 **At user launch time, nothing is installed.** YUBSUB opens as a normal app; the Python interpreter and packages are already inside. The app processes authorized audio directly on the user's Mac.
 
-There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes the unsigned v0.4.3 release only after the owner configures matching Ed25519 update-signing keys.
+There are two separate .app downloads (Intel and Apple silicon). The workflow uses standard macOS GitHub Actions runners and publishes the WAV-enabled v0.5.1 release only after the owner configures matching Ed25519 update-signing keys.
 
 ## Build locally on a Mac
 
@@ -23,7 +23,7 @@ The script obtains pinned verified binaries for Deno and FFmpeg from public upst
 
 Sparkle 2 is embedded when `SPARKLE_PUBLIC_ED_KEY` is configured; the signed GitHub update archives and feeds are created in the release job. See [UPDATING.md](UPDATING.md) for key setup and security constraints.
 
-**MP3/FLAC output:** Audio Format selects MP3 (default) or FLAC. MP3 offers bitrate selection; FLAC uses lossless *encoding* of a compressed YouTube source and does not increase original fidelity. Both formats work for single-video files and playlist ZIPs. The Mac Save dialog uses the selected extension.
+**MP3/FLAC/WAV output:** Audio Format selects MP3 (default), FLAC or WAV. MP3 offers bitrate selection; FLAC uses lossless *encoding* of a compressed YouTube source and does not increase original fidelity. All three formats work for single-video files and playlist ZIPs. WAV uses 16-bit PCM with the source sample rate; conversion does not restore quality lost in YouTube audio. The Mac Save dialog uses the selected extension.
 
 **Single video MP3 saving:** The `DesktopUpdatesAPI.save_mp3` bridge validates an in-process, completed single-video job and uses the native macOS Save As dialog to copy the completed file atomically into the destination chosen by the customer. This avoids WebKit's inline audio playback behavior without changing the playlist ZIP workflow.
 

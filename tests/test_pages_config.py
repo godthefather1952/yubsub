@@ -34,6 +34,7 @@ def test_playlist_mode_is_default_on_both_frontends():
     assert "mode:jobMode" in root
     assert 'name="format" value="mp3" checked' in root
     assert 'name="format" value="flac"' in root
+    assert 'name="format" value="wav"' in root
     assert "format:jobFormat" in root
-    assert 'el("quality-section").hidden = fmt==="FLAC"' in root
+    assert 'el("quality-section").hidden = fmt!=="MP3"' in root
     assert '"↓ DOWNLOAD YOUR "+fmt' in root

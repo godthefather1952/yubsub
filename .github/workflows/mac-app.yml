@@ -5,7 +5,9 @@ on:
     paths:
       - "mac_app.py"
       - "app.py"
+      - "music_metadata.py"
       - "requirements.txt"
+      - "tests/**"
       - "static/**"
       - "mac-app/**"
       - ".github/workflows/mac-app.yml"
@@ -14,7 +16,9 @@ on:
     paths:
       - "mac_app.py"
       - "app.py"
+      - "music_metadata.py"
       - "requirements.txt"
+      - "tests/**"
       - "static/**"
       - "mac-app/**"
       - ".github/workflows/mac-app.yml"

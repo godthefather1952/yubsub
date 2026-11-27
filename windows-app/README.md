@@ -8,12 +8,12 @@ versions. A platform-specific launcher handles native desktop controls.
 
 - One portable `YUBSUB.exe` **inside a ZIP with its `_internal` folder**.
   Do not move only `YUBSUB.exe` out of the extracted folder.
-- One `YUBSUB-Setup-v0.5.0.exe` installer. It installs per-user into
+- One `YUBSUB-Setup-v0.5.1.exe` installer. It installs per-user into
   `%LOCALAPPDATA%\Programs\YUBSUB`, creates a Start Menu shortcut,
   offers a Desktop shortcut, and supports uninstalling.
-- Native Windows clipboard Paste, native Save As for single MP3/FLAC files,
+- Native Windows clipboard Paste, native Save As for single MP3/FLAC/WAV files,
   one ZIP for playlists, download progress/cancellation and single-video mode.
-- MP3 or FLAC conversion; original bitrate options apply to MP3 only.
+- MP3, FLAC or WAV conversion; WAV uses uncompressed 16-bit PCM, retains the source sample rate and is substantially larger. Original bitrate options apply to MP3 only.
 - Optional embedded artist, track, album, release-year and artwork tagging.
   MusicBrainz and Cover Art Archive are queried when there is a confident
   match. The original YouTube thumbnail may be used as a fallback.
@@ -66,7 +66,7 @@ Until an Authenticode certificate and a reputation history are configured,
 Windows SmartScreen may warn about a downloaded installer or portable EXE.
 Do not claim this is a digitally signed Windows executable. The build will
 need physical Windows 10/11 testing for real clipboard dialogs, WebView2,
-installed upgrades, FLAC/MP3 playback, and YouTube permission restrictions.
+installed upgrades, WAV/FLAC/MP3 playback, and YouTube permission restrictions.
 
 FFmpeg distributions may be GPL-licensed; redistribute the applicable
 copyright/license notices and satisfy source-distribution obligations

@@ -112,7 +112,7 @@ def test_chromeos_version_api_without_mutating_other_platforms(monkeypatch):
     response = isolated.app.test_client().get("/api/chromeos/version")
     assert response.status_code == 200
     assert response.json["platform"] == "chromeos-linux"
-    assert response.json["version"] == "0.5.0"
+    assert response.json["version"] == "0.5.1"
     assert response.json["updates"] is False
     assert isolated.app.test_client().get("/api/chromeos/update/check").status_code == 503
 

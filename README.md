@@ -1,4 +1,30 @@
-# YUBSUB — Playlist in. MP3s out.
+# YUBSUB — Playlist in. Audio out.
+
+## WAV + unified signed update rollout — v0.5.1 (development)
+
+The next shared YUBSUB release enables **MP3, FLAC and uncompressed 16-bit
+PCM WAV** for single-video downloads and playlist ZIPs. WAV uses the original
+audio's sample rate; source quality is limited by YouTube's compression.
+WAV files are larger, so separate WAV track-size limits are enforced.
+Music metadata and cover art are supported on a best-effort basis; many
+WAV players do not display embedded ID3 art.
+
+The shared conversion backend and interface power the Mac, Windows,
+ChromeOS Linux and website editions, but deploying the website and shipping
+desktop updates are different actions. Desktop packages are versioned
+v0.5.1 for all three OS targets. macOS uses Sparkle's signed daily updater,
+Windows checks signed releases daily and offers a verified installer, and
+ChromeOS checks signed releases daily and offers a verified .deb for explicit
+user installation. No platform silently installs updates.
+
+**This is a development feature until CI, real-device QA, and signed release
+publishing complete.** Mac desktop's previously published v0.4.3 package
+remains the officially advertised download below; this document does not
+claim the new v0.5.1 packages have been released. To publish the web
+edition, deploy matching frontend and backend code from the consolidated
+branch (Render may still track a separate default branch).
+
+
 
 ## YUBSUB desktop app — ChromeOS Linux
 

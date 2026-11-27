@@ -9,8 +9,8 @@ depending on YUBSUB's Render converter.
 
 The GitHub Actions workflow produces two installer files:
 
-- yubsub_0.5.0_amd64.deb — 64-bit Intel/AMD Chromebooks
-- yubsub_0.5.0_arm64.deb — 64-bit ARM Chromebooks
+- yubsub_0.5.1_amd64.deb — 64-bit Intel/AMD Chromebooks
+- yubsub_0.5.1_arm64.deb — 64-bit ARM Chromebooks
 
 They install YUBSUB under /opt/yubsub and add a YUBSUB launcher to the
 ChromeOS Linux apps menu. They include the frozen Python engine and
@@ -26,7 +26,7 @@ is needed on an end-user Chromebook.
    x86_64 means choose amd64; aarch64 means choose arm64.
 3. Download the corresponding official YUBSUB .deb package.
 4. In ChromeOS Files, select Install with Linux, or copy the .deb to Linux
-   files and use: sudo apt install ./yubsub_0.5.0_amd64.deb
+   files and use: sudo apt install ./yubsub_0.5.1_amd64.deb
    Substitute the correct architecture filename.
 5. Open YUBSUB from Linux apps. The launcher runs the local audio engine and
    opens Chrome on http://localhost:8765. If necessary open this address
@@ -42,16 +42,16 @@ the ChromeOS Files application.
 
 ## Features carried forward
 
-- Single-video downloads to MP3/FLAC, playlists to numbered ZIP files
-- MP3 quality selector (128/192/256/320 kbps), FLAC option
+- Single-video downloads to MP3/FLAC/WAV, playlists to numbered ZIP files
+- MP3 quality selector (128/192/256/320 kbps), FLAC and WAV options; WAV is uncompressed PCM and can be substantially larger
 - Clipboard Paste, normal ChromeOS browser saving and download prompts
 - Progress, cancellation, skipped-track reporting and temporary files
 - Optional artist/title/album/year and embedded album-art tagging
 - Local conversion without reliance on public Render service
-- User-initiated signed Linux update checks with verified .deb downloads
+- Daily automatic Linux update checks with signed .deb downloads offered for explicit user approval
 
 The existing owner Ed25519 public key authenticates signed chromeos-v*
-release manifests. The Linux updater verifies the full downloaded .deb
+release manifests. The Linux updater checks for signed updates when the browser opens (at most daily) and verifies the full downloaded .deb
 against its signed size and SHA256 before Chrome is allowed to download it.
 An updater without an owner public key is disabled, including unsigned
 development builds. The user installs a verified package explicitly via
